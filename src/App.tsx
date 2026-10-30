@@ -1,5 +1,5 @@
 import { AlertTriangle, Plus, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { sendHttp, type WireRequest } from "./api";
 import logo from "./assets/logo.png";
@@ -25,6 +25,7 @@ import { RequestBar } from "./components/RequestBar";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponseViewer } from "./components/ResponseViewer";
 import { EnvironmentModal } from "./components/EnvironmentModal";
+import { BurnedOverlay, type Burn } from "./components/BurnedOverlay";
 
 if (isMac) document.documentElement.classList.add("platform-mac");
 
@@ -40,6 +41,8 @@ function App() {
   const [sent, setSent] = useState<WireRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [burn, setBurn] = useState<Burn | null>(null);
+  const closeBurn = useCallback(() => setBurn(null), []);
   const workspace = useRef<HTMLDivElement>(null);
   const noRequestLine = useMemo(fun.noRequest, [activeId]);
 
@@ -80,9 +83,13 @@ function App() {
       }
       const wire = prepareRequest(req, vars);
       setSent(wire);
-      setResponse(await sendHttp(wire, req.settings));
+      const res = await sendHttp(wire, req.settings);
+      setResponse(res);
+      if (res.status >= 400) setBurn({ status: res.status, statusText: res.status_text });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
+      setBurn({ status: null, statusText: "Request failed", message });
     } finally {
       setLoading(false);
     }
@@ -172,6 +179,7 @@ function App() {
           onClose={() => setShowEnvironments(false)}
         />
       )}
+      {burn && <BurnedOverlay burn={burn} onClose={closeBurn} />}
       {collections.error && (
         <div className="toast" onClick={collections.clearError}>
           <AlertTriangle size={16} />

@@ -364,3 +364,103 @@ kbd { font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: rgba(
 }
 .toast > svg { color: var(--red); flex-shrink: 0; margin-top: 1px; }
 .toast-close { margin-left: 6px; color: var(--muted); flex-shrink: 0; }
+
+/* ───────────── Burned: the full-screen error meme ───────────── */
+.burned {
+  position: fixed; inset: 0; z-index: 100; overflow: clip; cursor: pointer;
+  display: grid; place-items: center; color: #fff;
+  font-family: Impact, "Haettenschweiler", "Arial Narrow Bold", "Arial Black", sans-serif;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 79, 123, 0.55), transparent 55%),
+    repeating-conic-gradient(from 0deg at 50% 45%, #ff2d55 0deg 10deg, #ff7a00 10deg 20deg, #7a00ff 20deg 30deg, #00e0ff 30deg 40deg);
+  animation: burned-in 0.35s cubic-bezier(.2, 1.6, .4, 1) both, burned-shake 0.5s 0.35s ease-in-out 2;
+}
+.burned::before {
+  /* spin the sunburst behind everything */
+  content: ""; position: absolute; inset: -50%;
+  background: repeating-conic-gradient(from 0deg, rgba(0, 0, 0, 0.35) 0deg 8deg, transparent 8deg 16deg);
+  animation: burned-spin 14s linear infinite;
+}
+.burned::after {
+  /* deep-fried grain + scanlines */
+  content: ""; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay; opacity: 0.55;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.25) 0 2px, transparent 2px 4px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.burned > * { position: relative; z-index: 1; }
+.burned-flash { position: absolute !important; inset: 0; background: #fff; animation: burned-flash 0.45s ease-out forwards; z-index: 5 !important; pointer-events: none; }
+
+.burned-rain { position: absolute !important; inset: 0; pointer-events: none; }
+.burned-rain span { position: absolute; top: -12%; animation: burned-fall linear infinite; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4)); }
+
+.burned-code {
+  position: absolute !important; font-size: min(46vw, 62vh); line-height: 1; letter-spacing: -0.04em;
+  color: transparent; -webkit-text-stroke: 3px rgba(255, 255, 255, 0.35); pointer-events: none;
+  animation: burned-zoom 3s ease-in-out infinite alternate;
+}
+
+.burned-tape { position: absolute !important; left: -10%; right: -10%; height: 46px; background: #ffd60a; color: #000; overflow: hidden; display: flex; align-items: center; box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35); font-size: 26px; letter-spacing: 0.04em; white-space: pre; border-block: 4px solid #000; }
+.burned-tape.top { top: 9%; transform: rotate(-4deg); }
+.burned-tape.bottom { bottom: 9%; transform: rotate(3deg); }
+.burned-tape > div { animation: burned-marquee 12s linear infinite; }
+.burned-tape.bottom > div { animation-direction: reverse; }
+
+.burned-sticker {
+  position: absolute !important; padding: 8px 16px; font-size: 26px; text-transform: uppercase; color: #000;
+  background: #fff; border: 4px solid #000; border-radius: 12px; box-shadow: 6px 6px 0 #000;
+  transform: rotate(var(--r)) scale(0); animation: burned-pop 0.45s cubic-bezier(.2, 1.8, .4, 1) forwards, burned-wobble 1.6s 0.8s ease-in-out infinite;
+}
+.burned-sticker:nth-of-type(2n) { background: #00f5a0; }
+.burned-sticker:nth-of-type(3n) { background: #ff4fd8; color: #fff; }
+
+.burned-center { display: flex; flex-direction: column; align-items: center; gap: 14px; cursor: default; text-align: center; padding: 0 24px; z-index: 3 !important; }
+.burned-logo { position: relative; width: 120px; height: 120px; animation: burned-spin-pop 0.9s cubic-bezier(.2, 1.4, .4, 1) both; }
+.burned-logo img { width: 100%; height: 100%; object-fit: contain; filter: saturate(3) contrast(1.6) drop-shadow(0 0 30px #ff2d55); }
+.burned-skull { position: absolute; right: -20px; bottom: -12px; font-size: 54px; animation: burned-wobble 0.8s ease-in-out infinite; }
+
+.burned-title {
+  position: relative; margin: 0; font-size: clamp(48px, 9vw, 128px); line-height: 0.95; letter-spacing: 0.01em; font-weight: 400;
+  color: #fff; -webkit-text-stroke: 3px #000; paint-order: stroke fill;
+  text-shadow: 6px 6px 0 #000, 0 0 40px rgba(255, 45, 85, 0.9);
+  animation: burned-pulse 0.7s ease-in-out infinite alternate;
+}
+.burned-title::before, .burned-title::after { content: attr(data-text); position: absolute; inset: 0; -webkit-text-stroke: 0; text-shadow: none; mix-blend-mode: screen; }
+.burned-title::before { color: #00e5ff; animation: burned-glitch-a 1.3s steps(2) infinite; }
+.burned-title::after { color: #ff00c8; animation: burned-glitch-b 1.1s steps(2) infinite; }
+
+.burned-headline {
+  font-size: clamp(22px, 3vw, 38px); background: #000; color: #ffd60a; padding: 4px 18px; transform: rotate(-2deg);
+  box-shadow: 5px 5px 0 #ff2d55;
+}
+.burned-status { display: flex; align-items: center; gap: 10px; font-family: var(--mono, ui-monospace, monospace); font-size: 15px; background: rgba(0, 0, 0, 0.7); padding: 8px 14px; border-radius: 10px; max-width: min(640px, 90vw); }
+.burned-status b { background: #ff2d55; padding: 2px 8px; border-radius: 6px; flex-shrink: 0; }
+.burned-status span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.burned-btn {
+  margin-top: 6px; font-family: inherit; font-size: 24px; letter-spacing: 0.02em; color: #000; cursor: pointer;
+  background: #fff; border: 4px solid #000; border-radius: 14px; padding: 10px 26px; box-shadow: 6px 6px 0 #000;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.burned-btn:hover { background: #ffd60a; transform: translate(-2px, -2px) rotate(-1deg); box-shadow: 8px 8px 0 #000; }
+.burned-btn:active { transform: translate(4px, 4px); box-shadow: 2px 2px 0 #000; }
+.burned-hint { font-family: var(--sans, system-ui); font-size: 12px; opacity: 0.8; text-shadow: 0 1px 2px #000; }
+
+@keyframes burned-in { from { opacity: 0; transform: scale(1.4) rotate(4deg); } }
+@keyframes burned-shake { 0%, 100% { translate: 0 0; } 20% { translate: -14px 6px; } 40% { translate: 12px -8px; } 60% { translate: -8px -4px; } 80% { translate: 6px 8px; } }
+@keyframes burned-flash { to { opacity: 0; } }
+@keyframes burned-spin { to { transform: rotate(360deg); } }
+@keyframes burned-fall { from { transform: translateY(0) rotate(0); } to { transform: translateY(125vh) rotate(540deg); } }
+@keyframes burned-zoom { from { transform: scale(0.92) rotate(-3deg); } to { transform: scale(1.06) rotate(3deg); } }
+@keyframes burned-marquee { to { transform: translateX(-50%); } }
+@keyframes burned-pop { to { transform: rotate(var(--r)) scale(1); } }
+@keyframes burned-wobble { 50% { rotate: 8deg; } }
+@keyframes burned-spin-pop { from { transform: scale(0) rotate(-720deg); } }
+@keyframes burned-pulse { to { transform: scale(1.05) rotate(-1.5deg); } }
+@keyframes burned-glitch-a { 0% { clip-path: inset(10% 0 60% 0); transform: translate(-6px, 2px); } 50% { clip-path: inset(55% 0 15% 0); transform: translate(5px, -3px); } 100% { clip-path: inset(30% 0 40% 0); transform: translate(-3px, 0); } }
+@keyframes burned-glitch-b { 0% { clip-path: inset(65% 0 5% 0); transform: translate(6px, -2px); } 50% { clip-path: inset(5% 0 70% 0); transform: translate(-5px, 3px); } 100% { clip-path: inset(40% 0 35% 0); transform: translate(4px, 1px); } }
+
+@media (max-width: 760px) { .burned-sticker { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .burned, .burned *, .burned::before { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; }
+  .burned-rain { display: none; }
+}

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { VarInput } from "./VarInput";
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -17,16 +18,7 @@ interface TextInputProps {
 }
 
 export function TextInput({ value, onChange, placeholder, secret }: TextInputProps) {
-  return (
-    <input
-      className="input"
-      type={secret ? "password" : "text"}
-      value={value}
-      placeholder={placeholder}
-      spellCheck={false}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
+  return <VarInput inputClassName="input" value={value} placeholder={placeholder} masked={secret} onChange={onChange} />;
 }
 
 interface SelectProps<T extends string> {

@@ -1,6 +1,6 @@
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
-import { collectionApi, type RawNode } from "./api";
+import { collectionApi, envApi, type RawNode } from "./api";
 import {
   clearLegacyRequests,
   loadActiveRequest,
@@ -13,9 +13,12 @@ import {
   saveActiveRequest,
   saveCollectionRoots,
   saveExpanded,
+  saveSecrets,
   saveToken,
+  stripSecrets,
+  withSecrets,
 } from "./storage";
-import { newRequest, type OAuth2Token, type RequestItem } from "./types";
+import { newRequest, withEmptyRow, type OAuth2Token, type RequestItem, type Variable } from "./types";
 
 export interface FolderNode {
   kind: "folder";
@@ -35,6 +38,8 @@ export type TreeNode = FolderNode | RequestNode;
 export interface Collection {
   root: string;
   name: string;
+  /** Collection-level variables, stored in burno.json */
+  variables: Variable[];
   children: TreeNode[];
 }
 
@@ -49,6 +54,12 @@ const SAVE_DELAY_MS = 400;
 
 /** Unique key of a node: request ids, expanded folders, … */
 export const nodeKey = (root: string, path: string) => `${root}${SEP}${path}`;
+
+/** Collection root of a request id */
+export const rootOf = (id: string) => splitKey(id)[0];
+
+/** Owner key of the collection variables' secrets */
+const varsOwner = (root: string) => nodeKey(root, "burno.json");
 
 function splitKey(key: string): [string, string] {
   const i = key.lastIndexOf(SEP);
@@ -148,8 +159,16 @@ export function useCollections() {
   const reload = async (root: string) => {
     const raw = await collectionApi.load(root);
     const fresh: Record<string, RequestItem> = {};
-    const collection = { root, name: raw.name, children: convert(root, raw.children, fresh, loadTokens()) };
-    setLoaded((l) => ({ ...l, [root]: collection }));
+    const variables = withEmptyRow<Variable>(raw.variables);
+    const collection = {
+      root,
+      name: raw.name,
+      variables: withSecrets(varsOwner(root), variables),
+      children: convert(root, raw.children, fresh, loadTokens()),
+    };
+    // Unsaved variable edits win over what is still on disk
+    const pending = timers.current.has(varsOwner(root));
+    setLoaded((l) => ({ ...l, [root]: pending && l[root] ? { ...collection, variables: l[root].variables } : collection }));
     setRequests((rs) => ({
       ...Object.fromEntries(Object.entries(rs).filter(([id]) => !id.startsWith(nodeKey(root, "")))),
       ...fresh,
@@ -163,10 +182,13 @@ export function useCollections() {
 
   /** Writes pending edits right away (before renaming, deleting, reloading…). */
   const flush = async () => {
-    const ids = [...timers.current.keys()];
-    timers.current.forEach((t) => clearTimeout(t));
-    timers.current.clear();
-    await Promise.all(ids.filter((id) => latest.current[id]).map((id) => writeNow(latest.current[id])));
+    // Only request writes: collection variables keep their own timer
+    const ids = [...timers.current.keys()].filter((id) => latest.current[id]);
+    ids.forEach((id) => {
+      clearTimeout(timers.current.get(id));
+      timers.current.delete(id);
+    });
+    await Promise.all(ids.map((id) => writeNow(latest.current[id])));
   };
 
   const expand = (root: string, dir: string) =>
@@ -221,7 +243,23 @@ export function useCollections() {
     );
   };
 
+  const setVariables = (root: string, variables: Variable[]) => {
+    setLoaded((l) => ({ ...l, [root]: { ...l[root], variables } }));
+    saveSecrets(varsOwner(root), variables);
+    const key = varsOwner(root);
+    clearTimeout(timers.current.get(key));
+    timers.current.set(
+      key,
+      window.setTimeout(() => {
+        timers.current.delete(key);
+        envApi.setCollectionVariables(root, stripSecrets(variables)).catch(report);
+      }, SAVE_DELAY_MS),
+    );
+  };
+
   const actions = {
+    setVariables,
+
     select: (id: string) => setActiveId(id),
 
     toggle: (key: string) =>
@@ -349,6 +387,7 @@ export function useCollections() {
     renaming,
     error,
     clearError: () => setError(null),
+    report,
     updateRequest,
     actions,
   };

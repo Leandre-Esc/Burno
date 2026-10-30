@@ -195,6 +195,11 @@ pub fn run() {
             collections::folder_create,
             collections::entry_rename,
             collections::entry_delete,
+            collections::collection_set_variables,
+            collections::env_list,
+            collections::env_write,
+            collections::env_rename,
+            collections::env_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -4,14 +4,12 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
-  Globe,
   Library,
   LogOut,
   Moon,
   Pencil,
   Plus,
   Search,
-  Settings2,
   Sun,
   Trash2,
 } from "lucide-react";
@@ -20,14 +18,17 @@ import logo from "../assets/logo.png";
 import { baseName, nodeKey, type Collection, type CollectionsState, type TreeNode } from "../collections";
 import { fun } from "../fun";
 import type { Theme } from "../storage";
-import type { Environment, RequestItem } from "../types";
+import type { EnvironmentsState } from "../environments";
+import type { RequestItem } from "../types";
+import type { EnvTab } from "./EnvironmentModal";
+import { EnvPicker } from "./EnvPicker";
 
 interface Props {
   state: CollectionsState;
-  environments: Environment[];
-  activeEnvId: string | null;
-  onEnvironmentChange: (id: string | null) => void;
-  onManageEnvironments: () => void;
+  envs: EnvironmentsState;
+  /** Collection whose environments the picker shows */
+  envRoot: string | null;
+  onManageEnvironments: (tab: EnvTab) => void;
   theme: Theme;
   onToggleTheme: () => void;
 }
@@ -224,7 +225,7 @@ function CollectionRow({ state, collection, isOpen }: { state: CollectionsState;
   );
 }
 
-export function Sidebar({ state, environments, activeEnvId, onEnvironmentChange, onManageEnvironments, theme, onToggleTheme }: Props) {
+export function Sidebar({ state, envs, envRoot, onManageEnvironments, theme, onToggleTheme }: Props) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
 
@@ -269,16 +270,12 @@ export function Sidebar({ state, environments, activeEnvId, onEnvironmentChange,
       </div>
 
       <div className="sidebar-footer">
-        <div className={`env-picker ${activeEnvId ? "active" : ""}`} title="Environment">
-          <Globe size={14} />
-          <select className="select" value={activeEnvId ?? ""} onChange={(e) => onEnvironmentChange(e.target.value || null)}>
-            <option value="">No environment</option>
-            {environments.map((env) => (
-              <option key={env.id} value={env.id}>{env.name}</option>
-            ))}
-          </select>
-          <button className="icon-btn" title="Manage environments" onClick={onManageEnvironments}><Settings2 size={15} /></button>
-        </div>
+        <EnvPicker
+          envs={envs}
+          root={envRoot}
+          collectionName={state.collections.find((c) => c.root === envRoot)?.name ?? null}
+          onManage={onManageEnvironments}
+        />
         <button className="icon-btn" title={theme === "dark" ? "Light mode" : "Dark mode"} onClick={onToggleTheme}>
           {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
         </button>

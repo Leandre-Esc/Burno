@@ -1,4 +1,4 @@
-import { newRequest, type BodyMode, type Environment, type OAuth2Token, type RequestItem } from "./types";
+import { newRequest, withEmptyRow, type BodyMode, type Environment, type OAuth2Token, type RequestItem, type Variable } from "./types";
 import { paramsFromUrl } from "./url";
 
 const KEYS = {
@@ -10,6 +10,8 @@ const KEYS = {
   expanded: "burno.expanded",
   activeRequest: "burno.activeRequest",
   tokens: "burno.tokens",
+  activeCollectionEnvs: "burno.activeCollectionEnvs",
+  secrets: "burno.secrets",
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -43,6 +45,7 @@ export function normalizeRequest(raw: any): RequestItem {
     body,
     auth: { ...base.auth, ...raw.auth, oauth2: { ...base.auth.oauth2, ...raw.auth?.oauth2 } },
     settings: { ...base.settings, ...raw.settings },
+    vars: withEmptyRow(raw.vars),
   };
 }
 
@@ -60,6 +63,39 @@ export const saveEnvironments = (envs: Environment[]) => save(KEYS.environments,
 
 export const loadActiveEnvironment = () => load<string | null>(KEYS.activeEnvironment, null);
 export const saveActiveEnvironment = (id: string | null) => save(KEYS.activeEnvironment, id);
+
+/** Active environment file of each collection, by collection root */
+export const loadActiveCollectionEnvs = () => load<Record<string, string>>(KEYS.activeCollectionEnvs, {});
+export const saveActiveCollectionEnvs = (map: Record<string, string>) => save(KEYS.activeCollectionEnvs, map);
+
+// Secret values of collection variables stay on this machine, keyed by "<root>::<file>"
+type Secrets = Record<string, Record<string, string>>;
+const loadSecrets = () => load<Secrets>(KEYS.secrets, {});
+
+/** Puts the locally stored secret values back into variables read from disk. */
+export function withSecrets(owner: string, vars: Variable[]): Variable[] {
+  const values = loadSecrets()[owner] ?? {};
+  return vars.map((v) => (v.secret ? { ...v, value: values[v.key] ?? "" } : v));
+}
+
+export function saveSecrets(owner: string, vars: Variable[]) {
+  const secrets = loadSecrets();
+  const values = Object.fromEntries(vars.filter((v) => v.secret && v.key).map((v) => [v.key, v.value]));
+  if (Object.keys(values).length) secrets[owner] = values;
+  else delete secrets[owner];
+  save(KEYS.secrets, secrets);
+}
+
+export function moveSecrets(from: string, to: string) {
+  const secrets = loadSecrets();
+  if (!secrets[from]) return;
+  secrets[to] = secrets[from];
+  delete secrets[from];
+  save(KEYS.secrets, secrets);
+}
+
+/** What goes in a file: secret values blanked out. */
+export const stripSecrets = (vars: Variable[]) => vars.map((v) => (v.secret ? { ...v, value: "" } : v));
 
 export const loadCollectionRoots = () => load<string[]>(KEYS.collections, []);
 export const saveCollectionRoots = (roots: string[]) => save(KEYS.collections, roots);

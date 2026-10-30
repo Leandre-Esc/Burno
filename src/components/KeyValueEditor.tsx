@@ -1,8 +1,9 @@
-import { X } from "lucide-react";
+import { Lock, LockOpen, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { emptyRow, type KeyValue } from "../types";
+import { VarInput } from "./VarInput";
 
-interface Props<T extends KeyValue> {
+interface Props<T extends KeyValue & { secret?: boolean }> {
   rows: T[];
   onChange: (rows: T[]) => void;
   newRow?: () => T;
@@ -10,15 +11,18 @@ interface Props<T extends KeyValue> {
   renderValue?: (row: T, update: (patch: Partial<T>) => void) => ReactNode;
   keyPlaceholder?: string;
   valuePlaceholder?: string;
+  /** Adds a lock toggle that masks the value and keeps it out of files */
+  secrets?: boolean;
 }
 
-export function KeyValueEditor<T extends KeyValue>({
+export function KeyValueEditor<T extends KeyValue & { secret?: boolean }>({
   rows,
   onChange,
   newRow = emptyRow as () => T,
   renderValue,
   keyPlaceholder = "Key",
   valuePlaceholder = "Value",
+  secrets = false,
 }: Props<T>) {
   const update = (i: number, patch: Partial<T>) => {
     const next = rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r));
@@ -37,7 +41,7 @@ export function KeyValueEditor<T extends KeyValue>({
     <table className="kv-table">
       <tbody>
         {rows.map((row, i) => (
-          <tr key={i}>
+          <tr key={i} className={row.enabled ? "" : "disabled"}>
             <td className="kv-check">
               <input
                 type="checkbox"
@@ -57,14 +61,25 @@ export function KeyValueEditor<T extends KeyValue>({
               {renderValue ? (
                 renderValue(row, (patch) => update(i, patch))
               ) : (
-                <input
+                <VarInput
                   placeholder={valuePlaceholder}
                   value={row.value}
-                  spellCheck={false}
-                  onChange={(e) => update(i, { value: e.target.value } as Partial<T>)}
+                  masked={!!row.secret}
+                  onChange={(value) => update(i, { value } as Partial<T>)}
                 />
               )}
             </td>
+            {secrets && (
+              <td className="kv-secret">
+                <button
+                  className={`delete-btn visible ${row.secret ? "on" : ""}`}
+                  title={row.secret ? "Secret: masked and never written to collection files" : "Mark as secret"}
+                  onClick={() => update(i, { secret: !row.secret } as Partial<T>)}
+                >
+                  {row.secret ? <Lock size={13} /> : <LockOpen size={13} />}
+                </button>
+              </td>
+            )}
             <td className="kv-del">
               <button className="delete-btn" title="Remove" onClick={() => remove(i)}><X size={14} /></button>
             </td>

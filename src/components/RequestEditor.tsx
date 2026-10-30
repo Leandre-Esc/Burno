@@ -13,7 +13,7 @@ interface Props {
   onChange: (req: RequestItem) => void;
 }
 
-type Tab = "params" | "body" | "headers" | "auth" | "settings";
+type Tab = "params" | "body" | "headers" | "auth" | "vars" | "settings";
 
 const countActive = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.key).length;
 
@@ -27,6 +27,7 @@ export function RequestEditor({ request, vars, onChange }: Props) {
     ["body", "Body", request.body.mode !== "none"],
     ["headers", "Headers", countActive(request.headers)],
     ["auth", "Auth", request.auth.type !== "none"],
+    ["vars", "Vars", countActive(request.vars)],
     ["settings", "Settings", false],
   ];
 
@@ -52,6 +53,15 @@ export function RequestEditor({ request, vars, onChange }: Props) {
         {tab === "headers" && <KeyValueEditor rows={request.headers} onChange={(headers) => set({ headers })} />}
         {tab === "auth" && (
           <AuthEditor auth={request.auth} vars={vars} settings={request.settings} onChange={(auth) => set({ auth })} />
+        )}
+        {tab === "vars" && (
+          <>
+            <p className="hint">
+              Request variables override every environment. They can reference other variables, e.g.{" "}
+              <code>{"{{baseUrl}}/v2"}</code>.
+            </p>
+            <KeyValueEditor rows={request.vars} keyPlaceholder="Variable" onChange={(vars) => set({ vars })} />
+          </>
         )}
         {tab === "settings" && <SettingsEditor settings={request.settings} onChange={(settings) => set({ settings })} />}
       </div>

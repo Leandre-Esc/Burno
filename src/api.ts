@@ -43,7 +43,13 @@ export type RawNode =
 export interface RawCollection {
   root: string;
   name: string;
+  variables: unknown;
   children: RawNode[];
+}
+
+export interface RawEnvironments {
+  environments: { file: string; data: unknown }[];
+  dotenv: Record<string, string>;
 }
 
 /** Collection files on disk; `path` is always relative to the collection `root`. */
@@ -57,4 +63,15 @@ export const collectionApi = {
   createFolder: (root: string, path: string) => invoke<void>("folder_create", { root, path }),
   renameEntry: (root: string, from: string, to: string) => invoke<void>("entry_rename", { root, from, to }),
   deleteEntry: (root: string, path: string) => invoke<void>("entry_delete", { root, path }),
+};
+
+/** Collection environments (`environments/<file>`), `.env` and collection variables. */
+export const envApi = {
+  list: (root: string) => invoke<RawEnvironments>("env_list", { root }),
+  write: (root: string, file: string, data: unknown, create = false) =>
+    invoke<void>("env_write", { root, file, data, create }),
+  rename: (root: string, from: string, to: string) => invoke<void>("env_rename", { root, from, to }),
+  remove: (root: string, file: string) => invoke<void>("env_delete", { root, file }),
+  setCollectionVariables: (root: string, variables: unknown) =>
+    invoke<void>("collection_set_variables", { root, variables }),
 };

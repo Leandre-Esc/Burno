@@ -2,6 +2,7 @@ import { ChevronRight, Loader2, Send } from "lucide-react";
 import { sendShortcut } from "../platform";
 import { METHODS, type Method, type RequestItem } from "../types";
 import { paramsFromUrl } from "../url";
+import { VarInput } from "./VarInput";
 
 interface Props {
   request: RequestItem;
@@ -40,14 +41,11 @@ export function RequestBar({ request, breadcrumb, loading, onChange, onSend }: P
             <option key={m}>{m}</option>
           ))}
         </select>
-        <input
+        <VarInput
           className="url-input"
           placeholder="{{baseUrl}}/resource"
-          spellCheck={false}
           value={request.url}
-          onChange={(e) =>
-            onChange({ ...request, url: e.target.value, params: paramsFromUrl(e.target.value, request.params) })
-          }
+          onChange={(url) => onChange({ ...request, url, params: paramsFromUrl(url, request.params) })}
         />
         <button className="send-btn" type="submit" disabled={loading || !request.url} title={`Send (${sendShortcut})`}>
           {loading ? <Loader2 size={15} className="spin" /> : <Send size={14} />}

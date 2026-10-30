@@ -7,6 +7,11 @@ export interface KeyValue {
   enabled: boolean;
 }
 
+export interface Variable extends KeyValue {
+  /** Secret values are masked in the UI and never written to collection files */
+  secret?: boolean;
+}
+
 export interface MultipartField extends KeyValue {
   /** When true, `value` is a path to a local file */
   isFile: boolean;
@@ -82,12 +87,15 @@ export interface RequestItem {
   body: RequestBody;
   auth: Auth;
   settings: RequestSettings;
+  /** Request-level variables, the highest precedence */
+  vars: Variable[];
 }
 
+/** Global environments use a uuid as id; collection environments their file name. */
 export interface Environment {
   id: string;
   name: string;
-  variables: KeyValue[];
+  variables: Variable[];
 }
 
 export interface HttpResponse {
@@ -101,6 +109,13 @@ export interface HttpResponse {
 }
 
 export const emptyRow = (): KeyValue => ({ key: "", value: "", enabled: true });
+/** Rows as edited in a table: always one empty row at the end for quick typing */
+export function withEmptyRow<T extends KeyValue>(rows: unknown, row: () => T = emptyRow as () => T): T[] {
+  const list = Array.isArray(rows) ? (rows as T[]) : [];
+  const last = list[list.length - 1];
+  return !last || last.key || last.value ? [...list, row()] : list;
+}
+
 export const emptyMultipartRow = (): MultipartField => ({ ...emptyRow(), isFile: false });
 
 export function defaultAuth(): Auth {
@@ -150,6 +165,7 @@ export function newRequest(): RequestItem {
     },
     auth: defaultAuth(),
     settings: { timeoutMs: 30000, followRedirects: true, verifySsl: true },
+    vars: [emptyRow()],
   };
 }
 

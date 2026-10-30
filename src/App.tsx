@@ -3,28 +3,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { sendHttp, type WireRequest } from "./api";
 import logo from "./assets/logo.png";
-import { useCollections } from "./collections";
+import { rootOf, useCollections } from "./collections";
+import { useEnvironments } from "./environments";
 import { fun } from "./fun";
-import { envVars, interpolate } from "./interpolate";
+import { interpolate, scopeVars } from "./interpolate";
 import { ensureToken } from "./oauth2";
 import { isMac } from "./platform";
 import { prepareRequest } from "./prepare";
-import {
-  loadActiveEnvironment,
-  loadEnvironments,
-  loadSplit,
-  loadTheme,
-  saveActiveEnvironment,
-  saveEnvironments,
-  saveSplit,
-  saveTheme,
-} from "./storage";
+import { loadSplit, loadTheme, saveSplit, saveTheme } from "./storage";
 import type { HttpResponse } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { RequestBar } from "./components/RequestBar";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponseViewer } from "./components/ResponseViewer";
-import { EnvironmentModal } from "./components/EnvironmentModal";
+import { EnvironmentModal, type EnvTab } from "./components/EnvironmentModal";
+import { ScopeContext } from "./components/VarInput";
 import { BurnedOverlay, type Burn } from "./components/BurnedOverlay";
 
 if (isMac) document.documentElement.classList.add("platform-mac");
@@ -32,9 +25,8 @@ if (isMac) document.documentElement.classList.add("platform-mac");
 function App() {
   const collections = useCollections();
   const { active, activeId, updateRequest } = collections;
-  const [environments, setEnvironments] = useState(loadEnvironments);
-  const [activeEnvId, setActiveEnvId] = useState(loadActiveEnvironment);
-  const [showEnvironments, setShowEnvironments] = useState(false);
+  const envs = useEnvironments(collections.collections, collections.report);
+  const [envModal, setEnvModal] = useState<EnvTab | null>(null);
   const [theme, setTheme] = useState(loadTheme);
   const [split, setSplit] = useState(loadSplit);
   const [response, setResponse] = useState<HttpResponse | null>(null);
@@ -43,11 +35,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [burn, setBurn] = useState<Burn | null>(null);
   const closeBurn = useCallback(() => setBurn(null), []);
+  const closeEnvModal = useCallback(() => setEnvModal(null), []);
   const workspace = useRef<HTMLDivElement>(null);
   const noRequestLine = useMemo(fun.noRequest, [activeId]);
 
-  useEffect(() => saveEnvironments(environments), [environments]);
-  useEffect(() => saveActiveEnvironment(activeEnvId), [activeEnvId]);
   useEffect(() => saveSplit(split), [split]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -61,10 +52,10 @@ function App() {
     setError(null);
   }, [activeId]);
 
-  const vars = useMemo(
-    () => envVars(environments.find((e) => e.id === activeEnvId)),
-    [environments, activeEnvId],
-  );
+  // Environments follow the collection of the open request
+  const root = activeId ? rootOf(activeId) : (collections.collections[0]?.root ?? null);
+  const scope = envs.scopeFor(root, active);
+  const vars = scopeVars(scope);
 
   const send = async () => {
     if (!active || loading) return;
@@ -130,53 +121,57 @@ function App() {
     <div className="app">
       <Sidebar
         state={collections}
-        environments={environments}
-        activeEnvId={activeEnvId}
-        onEnvironmentChange={setActiveEnvId}
-        onManageEnvironments={() => setShowEnvironments(true)}
+        envs={envs}
+        envRoot={root}
+        onManageEnvironments={setEnvModal}
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
       />
-      <main className="main">
-        {active ? (
-          <>
-            <RequestBar
-              request={active}
-              breadcrumb={collections.breadcrumb}
-              loading={loading}
-              onChange={updateRequest}
-              onSend={send}
-            />
-            <div className="workspace" ref={workspace}>
-              <div className="pane pane-request" style={{ flexBasis: `${split * 100}%` }}>
-                <RequestEditor request={active} vars={vars} onChange={updateRequest} />
+      <ScopeContext.Provider value={scope}>
+        <main className="main">
+          {active ? (
+            <>
+              <RequestBar
+                request={active}
+                breadcrumb={collections.breadcrumb}
+                loading={loading}
+                onChange={updateRequest}
+                onSend={send}
+              />
+              <div className="workspace" ref={workspace}>
+                <div className="pane pane-request" style={{ flexBasis: `${split * 100}%` }}>
+                  <RequestEditor request={active} vars={vars} onChange={updateRequest} />
+                </div>
+                <div className="divider" onMouseDown={startResize} onDoubleClick={() => setSplit(0.5)} />
+                <div className="pane pane-response">
+                  <ResponseViewer response={response} sent={sent} error={error} loading={loading} />
+                </div>
               </div>
-              <div className="divider" onMouseDown={startResize} onDoubleClick={() => setSplit(0.5)} />
-              <div className="pane pane-response">
-                <ResponseViewer response={response} sent={sent} error={error} loading={loading} />
+            </>
+          ) : (
+            <div className="empty-state" data-tauri-drag-region>
+              <div className="empty-logo">
+                <img src={logo} alt="" />
               </div>
+              <h2>No request open</h2>
+              <p>{noRequestLine}</p>
+              {firstCollection && (
+                <button className="btn-primary" onClick={() => collections.actions.newRequest(firstCollection.root, "")}>
+                  <Plus size={15} /> New request
+                </button>
+              )}
             </div>
-          </>
-        ) : (
-          <div className="empty-state" data-tauri-drag-region>
-            <div className="empty-logo">
-              <img src={logo} alt="" />
-            </div>
-            <h2>No request open</h2>
-            <p>{noRequestLine}</p>
-            {firstCollection && (
-              <button className="btn-primary" onClick={() => collections.actions.newRequest(firstCollection.root, "")}>
-                <Plus size={15} /> New request
-              </button>
-            )}
-          </div>
-        )}
-      </main>
-      {showEnvironments && (
+          )}
+        </main>
+      </ScopeContext.Provider>
+      {envModal && (
         <EnvironmentModal
-          environments={environments}
-          onChange={setEnvironments}
-          onClose={() => setShowEnvironments(false)}
+          envs={envs}
+          collections={collections.collections}
+          onCollectionVariables={collections.actions.setVariables}
+          initialRoot={root}
+          initialTab={envModal}
+          onClose={closeEnvModal}
         />
       )}
       {burn && <BurnedOverlay burn={burn} onClose={closeBurn} />}

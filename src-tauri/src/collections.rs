@@ -3,11 +3,13 @@
 
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 const META_FILE: &str = "burno.json";
+const ENV_DIR: &str = "environments";
 const SKIPPED_DIRS: [&str; 3] = ["node_modules", "environments", "target"];
 
 type Res<T> = Result<T, String>;
@@ -36,7 +38,22 @@ impl TreeNode {
 pub struct Collection {
     root: String,
     name: String,
+    /// Collection-level variables from `burno.json`
+    variables: Value,
     children: Vec<TreeNode>,
+}
+
+#[derive(Serialize)]
+pub struct EnvFile {
+    file: String,
+    data: Value,
+}
+
+#[derive(Serialize)]
+pub struct CollectionEnvironments {
+    environments: Vec<EnvFile>,
+    /// Values from the collection's `.env` file, exposed as `{{process.env.KEY}}`
+    dotenv: BTreeMap<String, String>,
 }
 
 /// Joins a collection-relative path, refusing anything that escapes the collection.
@@ -60,15 +77,53 @@ fn relative(root: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
-fn write_meta(dir: &Path, name: &str) -> Res<()> {
-    let path = dir.join(META_FILE);
-    let mut meta: Value = fs::read_to_string(&path)
+fn read_meta(dir: &Path) -> Value {
+    fs::read_to_string(dir.join(META_FILE))
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .filter(Value::is_object)
-        .unwrap_or_else(|| json!({ "version": 1 }));
-    meta["name"] = json!(name);
-    fs::write(path, serde_json::to_string_pretty(&meta).map_err(err)?).map_err(err)
+        .unwrap_or_else(|| json!({ "version": 1 }))
+}
+
+fn set_meta(dir: &Path, key: &str, value: Value) -> Res<()> {
+    let mut meta = read_meta(dir);
+    meta[key] = value;
+    fs::write(dir.join(META_FILE), serde_json::to_string_pretty(&meta).map_err(err)?).map_err(err)
+}
+
+fn write_meta(dir: &Path, name: &str) -> Res<()> {
+    set_meta(dir, "name", json!(name))
+}
+
+/// Minimal `.env` parser: `KEY=value`, `export KEY=value`, quotes and `#` comments.
+fn parse_dotenv(text: &str) -> BTreeMap<String, String> {
+    let mut vars = BTreeMap::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let line = line.strip_prefix("export ").unwrap_or(line);
+        let Some((key, value)) = line.split_once('=') else { continue };
+        let value = value.trim();
+        let value = match value.chars().next() {
+            Some(q @ ('"' | '\'')) if value.len() >= 2 && value.ends_with(q) => {
+                let inner = &value[1..value.len() - 1];
+                if q == '"' { inner.replace("\\n", "\n") } else { inner.to_string() }
+            }
+            // Unquoted values can carry a trailing comment
+            _ => value.split(" #").next().unwrap_or("").trim().to_string(),
+        };
+        vars.insert(key.trim().to_string(), value);
+    }
+    vars
+}
+
+fn env_path(root: &str, file: &str) -> Res<PathBuf> {
+    if !file.ends_with(".json") || file.contains(['/', '\\']) {
+        return Err(format!("Invalid environment file: {file}"));
+    }
+    resolve(root, &format!("{ENV_DIR}/{file}"))
 }
 
 fn read_tree(root: &Path, dir: &Path) -> Res<Vec<TreeNode>> {
@@ -103,15 +158,13 @@ fn to_json(data: &Value) -> Res<String> {
 #[tauri::command]
 pub fn collection_load(root: String) -> Res<Collection> {
     let dir = resolve(&root, "")?;
-    let meta: Value = fs::read_to_string(dir.join(META_FILE))
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or(Value::Null);
+    let meta = read_meta(&dir);
     let name = meta["name"]
         .as_str()
         .map(String::from)
         .unwrap_or_else(|| dir.file_name().unwrap_or_default().to_string_lossy().to_string());
-    Ok(Collection { children: read_tree(&dir, &dir)?, root, name })
+    let variables = meta.get("variables").cloned().unwrap_or_else(|| json!([]));
+    Ok(Collection { children: read_tree(&dir, &dir)?, root, name, variables })
 }
 
 /// Creates `<parent>/<name>` (or `<name> 2`, ...) as a new collection and returns its path.
@@ -187,4 +240,57 @@ pub fn entry_delete(root: String, path: String) -> Res<()> {
         return Err("Cannot delete the collection root".into());
     }
     trash::delete(resolve(&root, &path)?).map_err(err)
+}
+
+#[tauri::command]
+pub fn collection_set_variables(root: String, variables: Value) -> Res<()> {
+    set_meta(&resolve(&root, "")?, "variables", variables)
+}
+
+/// Environments are `environments/<name>.json` files inside the collection.
+#[tauri::command]
+pub fn env_list(root: String) -> Res<CollectionEnvironments> {
+    let dir = resolve(&root, ENV_DIR)?;
+    let mut environments = Vec::new();
+    if dir.is_dir() {
+        for entry in fs::read_dir(&dir).map_err(err)? {
+            let path = entry.map_err(err)?.path();
+            let file = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            if file.starts_with('.') || !file.ends_with(".json") {
+                continue;
+            }
+            let data = fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok());
+            if let Some(data) = data {
+                environments.push(EnvFile { file, data });
+            }
+        }
+    }
+    environments.sort_by_key(|e| e.file.to_lowercase());
+    let dotenv = fs::read_to_string(resolve(&root, ".env")?).map(|s| parse_dotenv(&s)).unwrap_or_default();
+    Ok(CollectionEnvironments { environments, dotenv })
+}
+
+#[tauri::command]
+pub fn env_write(root: String, file: String, data: Value, create: bool) -> Res<()> {
+    let path = env_path(&root, &file)?;
+    if create && path.exists() {
+        return Err(format!("Environment {file} already exists"));
+    }
+    fs::create_dir_all(resolve(&root, ENV_DIR)?).map_err(err)?;
+    fs::write(path, to_json(&data)?).map_err(err)
+}
+
+#[tauri::command]
+pub fn env_rename(root: String, from: String, to: String) -> Res<()> {
+    let source = env_path(&root, &from)?;
+    let target = env_path(&root, &to)?;
+    if target.exists() && from.to_lowercase() != to.to_lowercase() {
+        return Err(format!("Environment {to} already exists"));
+    }
+    fs::rename(source, target).map_err(err)
+}
+
+#[tauri::command]
+pub fn env_delete(root: String, file: String) -> Res<()> {
+    trash::delete(env_path(&root, &file)?).map_err(err)
 }

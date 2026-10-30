@@ -1,56 +1,63 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { sendRequest } from "./api";
-import { loadRequests, saveRequests } from "./storage";
-import { newRequest, type HttpResponse, type RequestItem } from "./types";
+import { sendHttp, type WireRequest } from "./api";
+import { useCollections } from "./collections";
+import { envVars, interpolate } from "./interpolate";
+import { ensureToken } from "./oauth2";
+import { prepareRequest } from "./prepare";
+import { loadActiveEnvironment, loadEnvironments, saveActiveEnvironment, saveEnvironments } from "./storage";
+import type { HttpResponse } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponseViewer } from "./components/ResponseViewer";
+import { EnvironmentModal } from "./components/EnvironmentModal";
 
 function App() {
-  const [requests, setRequests] = useState<RequestItem[]>(() => {
-    const saved = loadRequests();
-    return saved.length ? saved : [newRequest()];
-  });
-  const [activeId, setActiveId] = useState<string | null>(requests[0]?.id ?? null);
+  const collections = useCollections();
+  const { active, activeId, updateRequest } = collections;
+  const [environments, setEnvironments] = useState(loadEnvironments);
+  const [activeEnvId, setActiveEnvId] = useState(loadActiveEnvironment);
+  const [showEnvironments, setShowEnvironments] = useState(false);
   const [response, setResponse] = useState<HttpResponse | null>(null);
+  const [sent, setSent] = useState<WireRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => saveRequests(requests), [requests]);
+  useEffect(() => saveEnvironments(environments), [environments]);
+  useEffect(() => saveActiveEnvironment(activeEnvId), [activeEnvId]);
 
-  const active = requests.find((r) => r.id === activeId) ?? null;
-
-  const selectRequest = (id: string | null) => {
-    setActiveId(id);
+  // The response panel belongs to the selected request
+  useEffect(() => {
     setResponse(null);
+    setSent(null);
     setError(null);
-  };
+  }, [activeId]);
 
-  const addRequest = () => {
-    const req = newRequest();
-    setRequests((rs) => [...rs, req]);
-    selectRequest(req.id);
-  };
-
-  const deleteRequest = (id: string) => {
-    const remaining = requests.filter((r) => r.id !== id);
-    setRequests(remaining);
-    if (id === activeId) selectRequest(remaining[0]?.id ?? null);
-  };
-
-  const updateRequest = (req: RequestItem) =>
-    setRequests((rs) => rs.map((r) => (r.id === req.id ? req : r)));
+  const vars = useMemo(
+    () => envVars(environments.find((e) => e.id === activeEnvId)),
+    [environments, activeEnvId],
+  );
 
   const send = async () => {
     if (!active) return;
     setLoading(true);
     setError(null);
     setResponse(null);
+    setSent(null);
     try {
-      setResponse(await sendRequest(active));
+      let req = active;
+      if (req.auth.type === "oauth2") {
+        const token = await ensureToken(req.auth.oauth2, (s) => interpolate(s, vars), req.settings);
+        if (token !== req.auth.oauth2.token) {
+          req = { ...req, auth: { ...req.auth, oauth2: { ...req.auth.oauth2, token } } };
+          updateRequest(req);
+        }
+      }
+      const wire = prepareRequest(req, vars);
+      setSent(wire);
+      setResponse(await sendHttp(wire, req.settings));
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -58,30 +65,54 @@ function App() {
 
   return (
     <div className="app">
-      <Sidebar
-        requests={requests}
-        activeId={activeId}
-        onSelect={selectRequest}
-        onAdd={addRequest}
-        onDelete={deleteRequest}
-      />
+      <Sidebar state={collections} />
       <main className="main">
+        <div className="topbar">
+          <select
+            className="input env-select"
+            value={activeEnvId ?? ""}
+            onChange={(e) => setActiveEnvId(e.target.value || null)}
+          >
+            <option value="">No Environment</option>
+            {environments.map((env) => (
+              <option key={env.id} value={env.id}>
+                {env.name}
+              </option>
+            ))}
+          </select>
+          <button className="btn" onClick={() => setShowEnvironments(true)}>
+            Environments
+          </button>
+        </div>
         {active ? (
           <>
             <RequestEditor
               request={active}
+              breadcrumb={collections.breadcrumb}
+              vars={vars}
               loading={loading}
               onChange={updateRequest}
               onSend={send}
             />
-            <ResponseViewer response={response} error={error} loading={loading} />
+            <ResponseViewer response={response} sent={sent} error={error} loading={loading} />
           </>
         ) : (
-          <div className="empty">
-            <button className="send-btn" onClick={addRequest}>New request</button>
-          </div>
+          <div className="empty">Select a request, or create one with + on a collection or folder.</div>
         )}
       </main>
+      {showEnvironments && (
+        <EnvironmentModal
+          environments={environments}
+          onChange={setEnvironments}
+          onClose={() => setShowEnvironments(false)}
+        />
+      )}
+      {collections.error && (
+        <div className="toast" onClick={collections.clearError}>
+          {collections.error}
+          <span className="toast-close">×</span>
+        </div>
+      )}
     </div>
   );
 }

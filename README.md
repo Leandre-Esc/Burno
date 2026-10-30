@@ -18,10 +18,46 @@ npm run tauri build
 
 Output goes to `src-tauri/target/release/bundle/` (.dmg/.app on macOS, .msi/.exe on Windows, .deb/.AppImage on Linux).
 
+## Features
+
+- Methods GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS, query params synced with the URL
+- Body: JSON, XML, Text, Form URL Encoded, Multipart (text + files)
+- Auth: Basic, Bearer, API Key (header or query), OAuth 2.0
+  - Grants: Authorization Code (+ PKCE S256), Client Credentials, Password, Implicit
+  - Login opens in an in-app window; the redirect to the Callback URL is intercepted
+  - Token auto-fetch, auto-refresh with refresh_token, token in header or query
+- Collections saved on disk (like Bruno), with nested folders: create, open, rename, duplicate, delete (to the trash)
+- Environments with `{{variables}}` usable in every field
+- Per-request settings: timeout, follow redirects, verify SSL
+- Response: status, time, size, pretty JSON, headers, and the exact request sent
+
+## Collections on disk
+
+A collection is a plain folder you can commit to git:
+
+```
+My API/
+├── burno.json          # { "name": "My API", "version": 1 }
+├── Health.json         # one file per request
+└── users/              # folders group requests
+    └── Get user.json
+```
+
+- Edits are saved automatically (400 ms after you stop typing).
+- OAuth tokens are **not** written to these files; they stay on this machine.
+- The first launch creates `My Collection` in the app data folder
+  (`~/Library/Application Support/com.burno.app/collections` on macOS) and moves older requests into it.
+- "Open" adds any folder that contains a `burno.json`; closing a collection only removes it from the sidebar.
+
 ## Structure
 
-- `src-tauri/src/lib.rs` — `send_request` command: sends HTTP requests from Rust (reqwest), so no CORS limits.
-- `src/api.ts` — calls the Rust command from the UI.
-- `src/types.ts` — request/response types.
-- `src/storage.ts` — saves requests in localStorage.
-- `src/components/` — Sidebar, RequestEditor, KeyValueEditor, ResponseViewer.
+- `src-tauri/src/lib.rs` — Rust commands: `send_request` (reqwest, no CORS limits) and `oauth2_authorize` (login window).
+- `src-tauri/src/collections.rs` — reading/writing collections on disk (paths can't escape the collection).
+- `src/collections.ts` — `useCollections` hook: tree, autosave, rename/delete, migration.
+- `src/api.ts` — calls the Rust commands from the UI.
+- `src/prepare.ts` — turns a request into what is sent: variables, body, auth.
+- `src/oauth2.ts` — OAuth 2.0 flows, PKCE, refresh.
+- `src/interpolate.ts` — `{{variable}}` replacement.
+- `src/url.ts` — URL ⇄ query params sync.
+- `src/types.ts` — data model; `src/storage.ts` — localStorage (environments, UI state, OAuth tokens).
+- `src/components/` — UI (Sidebar, RequestEditor, BodyEditor, AuthEditor, OAuth2Editor, SettingsEditor, EnvironmentModal, ResponseViewer).

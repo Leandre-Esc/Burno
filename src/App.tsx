@@ -10,7 +10,8 @@ import { interpolate, scopeVars } from "./interpolate";
 import { ensureToken } from "./oauth2";
 import { isMac } from "./platform";
 import { prepareRequest } from "./prepare";
-import { loadSplit, loadTheme, saveSplit, saveTheme } from "./storage";
+import { slime } from "./sounds";
+import { loadSounds, loadSplit, loadTheme, saveSounds, saveSplit, saveTheme } from "./storage";
 import type { HttpResponse } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { RequestBar } from "./components/RequestBar";
@@ -29,6 +30,7 @@ function App() {
   const [envModal, setEnvModal] = useState<EnvTab | null>(null);
   const [theme, setTheme] = useState(loadTheme);
   const [split, setSplit] = useState(loadSplit);
+  const [sounds, setSounds] = useState(loadSounds);
   const [response, setResponse] = useState<HttpResponse | null>(null);
   const [sent, setSent] = useState<WireRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +42,7 @@ function App() {
   const noRequestLine = useMemo(fun.noRequest, [activeId]);
 
   useEffect(() => saveSplit(split), [split]);
+  useEffect(() => saveSounds(sounds), [sounds]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     saveTheme(theme);
@@ -59,6 +62,7 @@ function App() {
 
   const send = async () => {
     if (!active || loading) return;
+    slime();
     setLoading(true);
     setError(null);
     setResponse(null);
@@ -126,6 +130,8 @@ function App() {
         onManageEnvironments={setEnvModal}
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+        sounds={sounds}
+        onToggleSounds={() => setSounds((s) => !s)}
       />
       <ScopeContext.Provider value={scope}>
         <main className="main">

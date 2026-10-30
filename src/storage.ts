@@ -128,6 +128,10 @@ export const loadTheme = (): Theme =>
   (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark");
 export const saveTheme = (theme: Theme) => save("burno.theme", theme);
 
+/** Sound played on send */
+export const loadSounds = () => load<boolean>("burno.sounds", true);
+export const saveSounds = (on: boolean) => save("burno.sounds", on);
+
 /** Share of the width given to the request pane */
 export const loadSplit = () => load<number>("burno.split", 0.5);
 export const saveSplit = (ratio: number) => save("burno.split", ratio);

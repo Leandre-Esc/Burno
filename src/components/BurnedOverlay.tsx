@@ -52,29 +52,6 @@ const STICKER_SPOTS = [
   { top: "46%", right: "3%" },
 ];
 
-/** A synthesized "vine boom": a short, low, falling sine with a bit of grit. */
-function boom() {
-  try {
-    const ctx = new AudioContext();
-    const now = ctx.currentTime;
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.5, now + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-    const shaper = ctx.createWaveShaper();
-    shaper.curve = Float32Array.from({ length: 256 }, (_, i) => Math.tanh(((i / 128) - 1) * 4));
-    const osc = ctx.createOscillator();
-    osc.frequency.setValueAtTime(140, now);
-    osc.frequency.exponentialRampToValueAtTime(38, now + 0.6);
-    osc.connect(shaper).connect(gain).connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 1);
-    osc.onended = () => ctx.close();
-  } catch {
-    // no audio, no boom
-  }
-}
-
 interface Props {
   burn: Burn;
   onClose: () => void;
@@ -107,7 +84,6 @@ export function BurnedOverlay({ burn, onClose }: Props) {
   }, [burn]);
 
   useEffect(() => {
-    boom();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" || e.key === "Enter") {
         e.preventDefault();

@@ -11,6 +11,8 @@ import {
   Plus,
   Search,
   Sun,
+  Volume2,
+  VolumeX,
   Trash2,
 } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
@@ -30,6 +32,8 @@ interface Props {
   envRoot: string | null;
   onManageEnvironments: (tab: EnvTab) => void;
   theme: Theme;
+  sounds: boolean;
+  onToggleSounds: () => void;
   onToggleTheme: () => void;
 }
 
@@ -225,7 +229,7 @@ function CollectionRow({ state, collection, isOpen }: { state: CollectionsState;
   );
 }
 
-export function Sidebar({ state, envs, envRoot, onManageEnvironments, theme, onToggleTheme }: Props) {
+export function Sidebar({ state, envs, envRoot, onManageEnvironments, theme, onToggleTheme, sounds, onToggleSounds }: Props) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
 
@@ -276,6 +280,9 @@ export function Sidebar({ state, envs, envRoot, onManageEnvironments, theme, onT
           collectionName={state.collections.find((c) => c.root === envRoot)?.name ?? null}
           onManage={onManageEnvironments}
         />
+        <button className="icon-btn" title={sounds ? "Mute sounds" : "Turn sounds on"} onClick={onToggleSounds}>
+          {sounds ? <Volume2 size={16} /> : <VolumeX size={16} />}
+        </button>
         <button className="icon-btn" title={theme === "dark" ? "Light mode" : "Dark mode"} onClick={onToggleTheme}>
           {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
         </button>

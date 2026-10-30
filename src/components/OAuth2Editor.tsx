@@ -138,7 +138,7 @@ export function OAuth2Editor({ config, vars, settings, onChange }: Props) {
       </Field>
 
       <div className="form-actions">
-        <button className="send-btn" disabled={busy} onClick={() => run(fetchToken)}>
+        <button className="btn-primary" disabled={busy} onClick={() => run(fetchToken)}>
           {busy ? "Waiting…" : "Get Access Token"}
         </button>
         {token?.refreshToken && (

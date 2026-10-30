@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Vars } from "../interpolate";
-import { METHODS, type KeyValue, type Method, type RequestItem } from "../types";
-import { paramsFromUrl, urlFromParams } from "../url";
+import type { KeyValue, RequestItem } from "../types";
+import { urlFromParams } from "../url";
 import { AuthEditor } from "./AuthEditor";
 import { BodyEditor } from "./BodyEditor";
 import { KeyValueEditor } from "./KeyValueEditor";
@@ -9,75 +9,39 @@ import { SettingsEditor } from "./SettingsEditor";
 
 interface Props {
   request: RequestItem;
-  /** Collection and folder names leading to the request */
-  breadcrumb: string[];
   vars: Vars;
-  loading: boolean;
   onChange: (req: RequestItem) => void;
-  onSend: () => void;
 }
 
 type Tab = "params" | "body" | "headers" | "auth" | "settings";
 
 const countActive = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.key).length;
 
-export function RequestEditor({ request, breadcrumb, vars, loading, onChange, onSend }: Props) {
+export function RequestEditor({ request, vars, onChange }: Props) {
   const [tab, setTab] = useState<Tab>("params");
   const set = (patch: Partial<RequestItem>) => onChange({ ...request, ...patch });
 
-  const tabs: [Tab, string, number | string | null][] = [
-    ["params", "Params", countActive(request.params) || null],
-    ["body", "Body", request.body.mode === "none" ? null : "•"],
-    ["headers", "Headers", countActive(request.headers) || null],
-    ["auth", "Auth", request.auth.type === "none" ? null : "•"],
-    ["settings", "Settings", null],
+  // badge: a count, true for a dot, or nothing
+  const tabs: [Tab, string, number | boolean][] = [
+    ["params", "Params", countActive(request.params)],
+    ["body", "Body", request.body.mode !== "none"],
+    ["headers", "Headers", countActive(request.headers)],
+    ["auth", "Auth", request.auth.type !== "none"],
+    ["settings", "Settings", false],
   ];
 
   return (
-    <section className="request-editor">
-      <div className="breadcrumb">
-        {breadcrumb.map((part, i) => (
-          <span key={i} className="crumb">{part} /</span>
-        ))}
-        <span className="request-name">{request.name}</span>
-      </div>
-      <form
-        className="url-bar"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSend();
-        }}
-      >
-        <select
-          className={`method method-${request.method}`}
-          value={request.method}
-          onChange={(e) => set({ method: e.target.value as Method })}
-        >
-          {METHODS.map((m) => (
-            <option key={m}>{m}</option>
-          ))}
-        </select>
-        <input
-          className="url-input"
-          placeholder="{{baseUrl}}/resource"
-          spellCheck={false}
-          value={request.url}
-          onChange={(e) => set({ url: e.target.value, params: paramsFromUrl(e.target.value, request.params) })}
-        />
-        <button className="send-btn" type="submit" disabled={loading || !request.url}>
-          {loading ? "Sending…" : "Send"}
-        </button>
-      </form>
-
+    <>
       <div className="tabs">
         {tabs.map(([id, label, badge]) => (
           <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>
-            {label} {badge !== null && <span className="badge">{badge}</span>}
+            {label}
+            {typeof badge === "number" ? badge > 0 && <span className="badge">{badge}</span> : badge && <span className="dot" />}
           </button>
         ))}
       </div>
 
-      <div className="tab-content">
+      <div className="tab-content" key={tab}>
         {tab === "params" && (
           <KeyValueEditor
             rows={request.params}
@@ -91,6 +55,6 @@ export function RequestEditor({ request, breadcrumb, vars, loading, onChange, on
         )}
         {tab === "settings" && <SettingsEditor settings={request.settings} onChange={(settings) => set({ settings })} />}
       </div>
-    </section>
+    </>
   );
 }

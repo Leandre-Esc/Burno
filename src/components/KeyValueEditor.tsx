@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { emptyRow, type KeyValue } from "../types";
 
@@ -65,7 +66,7 @@ export function KeyValueEditor<T extends KeyValue>({
               )}
             </td>
             <td className="kv-del">
-              <button className="delete-btn" onClick={() => remove(i)}>×</button>
+              <button className="delete-btn" title="Remove" onClick={() => remove(i)}><X size={14} /></button>
             </td>
           </tr>
         ))}

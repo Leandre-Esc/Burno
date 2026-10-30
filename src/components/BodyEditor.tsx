@@ -1,15 +1,15 @@
 import { open } from "@tauri-apps/plugin-dialog";
+import { Paperclip, Sparkles } from "lucide-react";
 import { emptyMultipartRow, type BodyMode, type MultipartField, type RequestBody } from "../types";
-import { Select } from "./fields";
 import { KeyValueEditor } from "./KeyValueEditor";
 
 const MODES: [BodyMode, string][] = [
-  ["none", "No Body"],
+  ["none", "None"],
   ["json", "JSON"],
   ["xml", "XML"],
   ["text", "Text"],
-  ["form", "Form URL Encoded"],
-  ["multipart", "Multipart Form"],
+  ["form", "Form"],
+  ["multipart", "Multipart"],
 ];
 
 const PLACEHOLDERS = { json: '{\n  "hello": "{{name}}"\n}', xml: "<root></root>", text: "" };
@@ -47,6 +47,7 @@ export function BodyEditor({ body, onChange }: Props) {
             if (typeof path === "string") update({ value: path });
           }}
         >
+          <Paperclip size={13} />
           {row.value ? fileName(row.value) : "Choose file…"}
         </button>
       ) : (
@@ -58,15 +59,23 @@ export function BodyEditor({ body, onChange }: Props) {
   return (
     <div className="body-editor">
       <div className="body-toolbar">
-        <Select value={mode} options={MODES} onChange={(mode) => set({ mode })} />
+        <div className="segmented">
+          {MODES.map(([m, label]) => (
+            <button key={m} className={m === mode ? "active" : ""} onClick={() => set({ mode: m })}>
+              {label}
+            </button>
+          ))}
+        </div>
         {mode === "json" && (
-          <button className="btn" onClick={formatJson}>Format</button>
+          <button className="btn small" onClick={formatJson}>
+            <Sparkles size={13} /> Format
+          </button>
         )}
       </div>
       {mode === "none" && <p className="hint">This request has no body.</p>}
       {(mode === "json" || mode === "xml" || mode === "text") && (
         <textarea
-          className="code"
+          className="code-input"
           placeholder={PLACEHOLDERS[mode]}
           spellCheck={false}
           value={body[mode]}

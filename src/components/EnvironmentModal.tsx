@@ -1,3 +1,4 @@
+import { Globe, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { newEnvironment, type Environment } from "../types";
 import { KeyValueEditor } from "./KeyValueEditor";
@@ -30,17 +31,24 @@ export function EnvironmentModal({ environments, onChange, onClose }: Props) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <span>Environments</span>
-          <button className="delete-btn visible" onClick={onClose}>×</button>
+          <div>
+            <div className="modal-title">Environments</div>
+            <div className="modal-subtitle">Variables shared by every collection</div>
+          </div>
+          <button className="icon-btn" title="Close" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">
           <ul className="env-list">
             {environments.map((env) => (
               <li key={env.id} className={env.id === selectedId ? "active" : ""} onClick={() => setSelectedId(env.id)}>
+                <Globe size={14} />
                 {env.name}
               </li>
             ))}
-            <li className="env-add" onClick={add}>+ New environment</li>
+            <li className="env-add" onClick={add}>
+              <Plus size={14} />
+              New environment
+            </li>
           </ul>
           <div className="env-editor">
             {selected ? (
@@ -51,7 +59,9 @@ export function EnvironmentModal({ environments, onChange, onClose }: Props) {
                     value={selected.name}
                     onChange={(e) => update({ ...selected, name: e.target.value })}
                   />
-                  <button className="btn danger" onClick={() => remove(selected.id)}>Delete</button>
+                  <button className="btn danger" onClick={() => remove(selected.id)}>
+                    <Trash2 size={14} /> Delete
+                  </button>
                 </div>
                 <p className="hint">
                   Use <code>{"{{name}}"}</code> in the URL, params, headers, body and auth fields.
@@ -63,7 +73,10 @@ export function EnvironmentModal({ environments, onChange, onClose }: Props) {
                 />
               </>
             ) : (
-              <p className="hint">Create an environment to store variables like base URLs and tokens.</p>
+              <div className="empty-state">
+                <p>Create an environment to store variables like base URLs and tokens.</p>
+                <button className="btn-primary" onClick={add}><Plus size={15} /> New environment</button>
+              </div>
             )}
           </div>
         </div>

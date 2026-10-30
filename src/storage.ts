@@ -84,3 +84,14 @@ export function moveTokens(rename: (id: string) => string) {
   const tokens = loadTokens();
   save(KEYS.tokens, Object.fromEntries(Object.entries(tokens).map(([id, t]) => [rename(id), t])));
 }
+
+export type Theme = "dark" | "light";
+
+export const loadTheme = (): Theme =>
+  load<Theme | null>("burno.theme", null) ??
+  (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark");
+export const saveTheme = (theme: Theme) => save("burno.theme", theme);
+
+/** Share of the width given to the request pane */
+export const loadSplit = () => load<number>("burno.split", 0.5);
+export const saveSplit = (ratio: number) => save("burno.split", ratio);

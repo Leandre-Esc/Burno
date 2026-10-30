@@ -2,6 +2,7 @@ import { ChevronRight, Loader2, Send } from "lucide-react";
 import { sendShortcut } from "../platform";
 import { METHODS, type Method, type RequestItem } from "../types";
 import { paramsFromUrl } from "../url";
+import { Dropdown } from "./Dropdown";
 import { VarInput } from "./VarInput";
 
 interface Props {
@@ -32,15 +33,15 @@ export function RequestBar({ request, breadcrumb, loading, onChange, onSend }: P
           onSend();
         }}
       >
-        <select
-          className={`select method-select method-${request.method}`}
+        <Dropdown
+          className="method-select"
+          variant="ghost"
+          title="Method"
+          menuWidth={150}
           value={request.method}
-          onChange={(e) => onChange({ ...request, method: e.target.value as Method })}
-        >
-          {METHODS.map((m) => (
-            <option key={m}>{m}</option>
-          ))}
-        </select>
+          options={METHODS.map((m) => ({ value: m, label: m, className: `method-${m}` }))}
+          onChange={(method: Method) => onChange({ ...request, method })}
+        />
         <VarInput
           className="url-input"
           placeholder="{{baseUrl}}/resource"

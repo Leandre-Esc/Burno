@@ -1,9 +1,10 @@
-import { Check, Copy, FileKey2, Globe, Layers, ListTree, Lock, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, Copy, FileKey2, Globe, Layers, Library, ListTree, Lock, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { Collection } from "../collections";
 import type { EnvironmentsState } from "../environments";
 import { DYNAMIC, SOURCE_LABELS, type Scope } from "../interpolate";
 import type { Environment, Variable } from "../types";
+import { Dropdown } from "./Dropdown";
 import { KeyValueEditor } from "./KeyValueEditor";
 import { ScopeContext } from "./VarInput";
 
@@ -246,11 +247,11 @@ export function EnvironmentModal({ envs, collections, onCollectionVariables, ini
               <ul className="env-list">
                 {collections.length > 1 && (
                   <li className="env-collection-pick">
-                    <select className="select" value={root ?? ""} onChange={(e) => switchRoot(e.target.value)}>
-                      {collections.map((c) => (
-                        <option key={c.root} value={c.root}>{c.name}</option>
-                      ))}
-                    </select>
+                    <Dropdown
+                      value={root ?? ""}
+                      options={collections.map((c) => ({ value: c.root, label: c.name, icon: <Library size={14} /> }))}
+                      onChange={switchRoot}
+                    />
                   </li>
                 )}
                 <Item icon={<Layers size={14} />} active={selection.kind === "vars"} onClick={() => setSelection({ kind: "vars" })}>

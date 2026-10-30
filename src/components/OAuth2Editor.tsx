@@ -4,11 +4,11 @@ import { fetchToken, isExpired, refreshToken } from "../oauth2";
 import type { GrantType, OAuth2Config, RequestSettings } from "../types";
 import { Checkbox, Field, Select, TextInput } from "./fields";
 
-const GRANT_TYPES: [GrantType, string][] = [
-  ["authorization_code", "Authorization Code"],
-  ["client_credentials", "Client Credentials"],
-  ["password", "Password Credentials"],
-  ["implicit", "Implicit"],
+const GRANT_TYPES: [GrantType, string, string][] = [
+  ["authorization_code", "Authorization Code", "User logs in through the browser"],
+  ["client_credentials", "Client Credentials", "Machine to machine, no user"],
+  ["password", "Password Credentials", "Username and password sent directly"],
+  ["implicit", "Implicit", "Legacy browser flow, token in the redirect"],
 ];
 
 interface Props {
@@ -107,7 +107,10 @@ export function OAuth2Editor({ config, vars, settings, onChange }: Props) {
         <Field label="Client Credentials">
           <Select
             value={config.credentialsPlacement}
-            options={[["basic_header", "Send as Basic Auth header"], ["body", "Send in request body"]]}
+            options={[
+              ["basic_header", "Send as Basic Auth header"],
+              ["body", "Send in request body"],
+            ]}
             onChange={(credentialsPlacement) => set({ credentialsPlacement })}
           />
         </Field>
@@ -116,7 +119,10 @@ export function OAuth2Editor({ config, vars, settings, onChange }: Props) {
       <Field label="Add Token to">
         <Select
           value={config.tokenPlacement}
-          options={[["header", "Header"], ["query", "Query Params"]]}
+          options={[
+            ["header", "Header"],
+            ["query", "Query Params"],
+          ]}
           onChange={(tokenPlacement) => set({ tokenPlacement })}
         />
       </Field>

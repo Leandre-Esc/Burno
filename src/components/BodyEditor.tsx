@@ -1,6 +1,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { Paperclip, Sparkles } from "lucide-react";
+import { Paperclip, Sparkles, Type } from "lucide-react";
 import { emptyMultipartRow, type BodyMode, type MultipartField, type RequestBody } from "../types";
+import { Dropdown } from "./Dropdown";
 import { KeyValueEditor } from "./KeyValueEditor";
 
 const MODES: [BodyMode, string][] = [
@@ -35,10 +36,15 @@ export function BodyEditor({ body, onChange }: Props) {
 
   const multipartValue = (row: MultipartField, update: (patch: Partial<MultipartField>) => void) => (
     <div className="multipart-value">
-      <select value={row.isFile ? "file" : "text"} onChange={(e) => update({ isFile: e.target.value === "file", value: "" })}>
-        <option value="text">Text</option>
-        <option value="file">File</option>
-      </select>
+      <Dropdown
+        variant="ghost"
+        value={row.isFile ? "file" : "text"}
+        options={[
+          { value: "text", label: "Text", icon: <Type size={13} /> },
+          { value: "file", label: "File", icon: <Paperclip size={13} /> },
+        ]}
+        onChange={(kind) => update({ isFile: kind === "file", value: "" })}
+      />
       {row.isFile ? (
         <button
           className="file-btn"

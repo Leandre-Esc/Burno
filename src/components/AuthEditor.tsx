@@ -3,12 +3,12 @@ import type { Auth, AuthType, RequestSettings } from "../types";
 import { Field, Select, TextInput } from "./fields";
 import { OAuth2Editor } from "./OAuth2Editor";
 
-const AUTH_TYPES: [AuthType, string][] = [
-  ["none", "No Auth"],
-  ["basic", "Basic Auth"],
-  ["bearer", "Bearer Token"],
-  ["apikey", "API Key"],
-  ["oauth2", "OAuth 2.0"],
+const AUTH_TYPES: [AuthType, string, string][] = [
+  ["none", "No Auth", "Send the request as is"],
+  ["basic", "Basic Auth", "Username and password"],
+  ["bearer", "Bearer Token", "Authorization: Bearer <token>"],
+  ["apikey", "API Key", "A key in a header or the query"],
+  ["oauth2", "OAuth 2.0", "Get and refresh tokens automatically"],
 ];
 
 interface Props {
@@ -59,7 +59,10 @@ export function AuthEditor({ auth, vars, settings, onChange }: Props) {
           <Field label="Add to">
             <Select
               value={auth.apikey.placement}
-              options={[["header", "Header"], ["query", "Query Params"]]}
+              options={[
+                ["header", "Header", "Sent as a request header"],
+                ["query", "Query Params", "Appended to the URL"],
+              ]}
               onChange={(placement) => setApiKey({ placement })}
             />
           </Field>

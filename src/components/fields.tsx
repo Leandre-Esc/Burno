@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Dropdown } from "./Dropdown";
 import { VarInput } from "./VarInput";
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -23,19 +24,18 @@ export function TextInput({ value, onChange, placeholder, secret }: TextInputPro
 
 interface SelectProps<T extends string> {
   value: T;
-  options: [T, string][];
+  /** [value, label, optional hint shown under the label] */
+  options: [T, string, string?][];
   onChange: (value: T) => void;
 }
 
 export function Select<T extends string>({ value, options, onChange }: SelectProps<T>) {
   return (
-    <select className="input" value={value} onChange={(e) => onChange(e.target.value as T)}>
-      {options.map(([v, label]) => (
-        <option key={v} value={v}>
-          {label}
-        </option>
-      ))}
-    </select>
+    <Dropdown
+      value={value}
+      options={options.map(([v, label, hint]) => ({ value: v, label, hint }))}
+      onChange={onChange}
+    />
   );
 }
 

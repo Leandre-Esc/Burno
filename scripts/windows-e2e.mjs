@@ -7,7 +7,6 @@ import { join } from "node:path";
 
 const DEBUG_PORT = 9222;
 const SHOTS = "e2e-screenshots";
-const CTRL_A = "a";
 const COLLECTION = join(process.env.APPDATA, "com.burno.app", "collections", "My Collection");
 
 mkdirSync(SHOTS, { recursive: true });

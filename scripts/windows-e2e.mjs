@@ -1,12 +1,11 @@
-// Drives the installed Burno through tauri-driver (WebDriver) on Windows.
-// Needs the APP env var (path of the installed exe) and tauri-driver on the PATH.
-import { spawn } from "node:child_process";
+// Launches the installed Burno on Windows and drives it through the webview's debugging port.
+// Needs the APP env var (path of the installed exe).
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 
-const DRIVER = "http://127.0.0.1:4444";
-const ELEMENT = "element-6066-11e4-a52e-4f735466cecf";
+const DEBUG_PORT = 9222;
 const SHOTS = "e2e-screenshots";
 const CTRL_A = "a";
 const COLLECTION = join(process.env.APPDATA, "com.burno.app", "collections", "My Collection");
@@ -24,45 +23,95 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
-const driver = spawn("tauri-driver", ["--native-driver", join(process.env.EDGEWEBDRIVER, "msedgedriver.exe")], {
+const app = spawn(process.env.APP, [], {
   stdio: "inherit",
+  env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEBUG_PORT}` },
 });
+let exited = null;
+app.on("exit", (code) => (exited = code ?? "signal"));
 
-let session;
+let ws;
+let nextId = 1;
+const pending = new Map();
 
-async function wd(method, path, body) {
-  const res = await fetch(`${DRIVER}${path}`, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: body && JSON.stringify(body),
-  });
-  const { value } = await res.json();
-  if (!res.ok) throw new Error(`${method} ${path}: ${value?.message ?? res.status}`);
-  return value;
+/** Sends a Chrome DevTools Protocol command to the app's webview */
+function cdp(method, params = {}) {
+  const id = nextId++;
+  ws.send(JSON.stringify({ id, method, params }));
+  return new Promise((resolve, reject) => pending.set(id, { resolve, reject, method }));
 }
-const s = (path) => `/session/${session}${path}`;
 
-/** Waits for an element, then returns its WebDriver id */
-async function find(css, timeout = 20000) {
-  const end = Date.now() + timeout;
+async function connect() {
+  const end = Date.now() + 60000;
   for (;;) {
-    try {
-      return (await wd("POST", s("/element"), { using: "css selector", value: css }))[ELEMENT];
-    } catch (e) {
-      if (Date.now() > end) throw new Error(`Not found: ${css}`);
-      await sleep(200);
+    if (exited !== null) throw new Error(`Burno exited with code ${exited}`);
+    const targets = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`)
+      .then((r) => r.json())
+      .catch(() => []);
+    const page = targets.find((t) => t.type === "page" && t.webSocketDebuggerUrl);
+    if (page) {
+      ws = new WebSocket(page.webSocketDebuggerUrl);
+      await new Promise((resolve, reject) => {
+        ws.onopen = resolve;
+        ws.onerror = () => reject(new Error("Could not connect to the webview"));
+      });
+      ws.onmessage = ({ data }) => {
+        const { id, result, error } = JSON.parse(data);
+        const call = pending.get(id);
+        if (!call) return;
+        pending.delete(id);
+        if (error) call.reject(new Error(`${call.method}: ${error.message}`));
+        else call.resolve(result);
+      };
+      return;
     }
+    if (Date.now() > end) throw new Error("The webview debugging port never opened");
+    await sleep(500);
   }
 }
-const click = async (css) => wd("POST", s(`/element/${await find(css)}/click`), {});
-const type = async (css, text) => {
+
+async function evaluate(expression) {
+  const { result, exceptionDetails } = await cdp("Runtime.evaluate", { expression, returnByValue: true });
+  if (exceptionDetails) throw new Error(`Page error: ${exceptionDetails.text}`);
+  return result.value;
+}
+
+/** Waits for a visible element and returns its center */
+async function find(css, timeout = 20000) {
+  const q = JSON.stringify(css);
+  const end = Date.now() + timeout;
+  for (;;) {
+    const c = await evaluate(`(() => {
+      const el = document.querySelector(${q});
+      if (!el) return null;
+      el.scrollIntoView({ block: "nearest" });
+      const r = el.getBoundingClientRect();
+      return r.width && r.height ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
+    })()`);
+    if (c) return c;
+    if (Date.now() > end) throw new Error(`Not found: ${css}`);
+    await sleep(200);
+  }
+}
+async function click(css) {
+  const { x, y } = await find(css);
+  const mouse = { x, y, button: "left", clickCount: 1 };
+  await cdp("Input.dispatchMouseEvent", { type: "mousePressed", ...mouse });
+  await cdp("Input.dispatchMouseEvent", { type: "mouseReleased", ...mouse });
+}
+/** Replaces the content of an input, through real key events */
+async function type(css, value) {
   await click(css);
-  await wd("POST", s(`/element/${await find(css)}/value`), { text: CTRL_A + text });
-};
-const text = async (css) => wd("GET", s(`/element/${await find(css)}/text`));
-const gone = async (css) => (await wd("POST", s("/elements"), { using: "css selector", value: css })).length === 0;
+  const a = { key: "a", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 2, commands: ["selectAll"] };
+  await cdp("Input.dispatchKeyEvent", { type: "keyDown", ...a });
+  await cdp("Input.dispatchKeyEvent", { type: "keyUp", ...a });
+  await cdp("Input.insertText", { text: value });
+}
+const text = async (css) => evaluate(`document.querySelector(${JSON.stringify(css)})?.innerText ?? ""`);
+const gone = async (css) => evaluate(`!document.querySelector(${JSON.stringify(css)})`);
 async function shot(name) {
-  writeFileSync(join(SHOTS, `${name}.png`), Buffer.from(await wd("GET", s("/screenshot")), "base64"));
+  const { data } = await cdp("Page.captureScreenshot", { format: "png" });
+  writeFileSync(join(SHOTS, `${name}.png`), Buffer.from(data, "base64"));
 }
 async function until(what, check, timeout = 20000) {
   const end = Date.now() + timeout;
@@ -75,12 +124,8 @@ async function until(what, check, timeout = 20000) {
 
 let failed = false;
 try {
-  await sleep(2000); // let tauri-driver start
-  session = (
-    await wd("POST", "/session", {
-      capabilities: { alwaysMatch: { browserName: "wry", "tauri:options": { application: process.env.APP } } },
-    })
-  ).sessionId;
+  await connect();
+  await cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
 
   await find(".brand-name");
   await until("default collection created on disk", () => existsSync(join(COLLECTION, "burno.json")));
@@ -135,10 +180,10 @@ try {
 } catch (e) {
   failed = true;
   console.error(`FAILED: ${e.message}`);
-  if (session) await shot("failure").catch(() => {});
+  if (ws) await shot("failure").catch(() => {});
 } finally {
-  if (session) await wd("DELETE", s("")).catch(() => {});
-  driver.kill();
+  ws?.close();
+  spawnSync("taskkill", ["/PID", String(app.pid), "/T", "/F"]);
   server.close();
 }
 process.exit(failed ? 1 : 0);

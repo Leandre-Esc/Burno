@@ -41,11 +41,6 @@ jobs:
           if (-not $app) { throw "Burno.exe not found after install" }
           "APP=$($app.FullName)" >> $env:GITHUB_ENV
 
-      - name: Test the installed app
-        run: |
-          cargo install tauri-driver --locked
-          node scripts/windows-e2e.mjs
-
       - name: Launch from the desktop and capture the window
         shell: pwsh
         run: |
@@ -59,6 +54,11 @@ jobs:
           [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
           $bmp.Save("e2e-screenshots/desktop.png")
           Stop-Process -Id $p.Id
+          Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 3
+
+      - name: Test the installed app
+        run: node scripts/windows-e2e.mjs
 
       - uses: actions/upload-artifact@v4
         if: always()

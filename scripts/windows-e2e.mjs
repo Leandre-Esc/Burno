@@ -1,5 +1,5 @@
-// Launches the installed Burno on Windows and drives it through the webview's debugging port.
-// Needs the APP env var (path of the installed exe).
+// Launches Burno on Windows and drives it through the webview's debugging port.
+// Needs the APP env var: an exe built with scripts/tauri.e2e.conf.json.
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -22,10 +22,7 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
-const app = spawn(process.env.APP, [], {
-  stdio: "inherit",
-  env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEBUG_PORT}` },
-});
+const app = spawn(process.env.APP, [], { stdio: "inherit" });
 let exited = null;
 app.on("exit", (code) => (exited = code ?? "signal"));
 

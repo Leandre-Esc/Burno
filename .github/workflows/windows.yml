@@ -41,13 +41,14 @@ jobs:
           if (-not $app) { throw "Burno.exe not found after install" }
           "APP=$($app.FullName)" >> $env:GITHUB_ENV
 
-      - name: Launch from the desktop and capture the window
+      - name: Launch the installed app and capture the window
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force e2e-screenshots | Out-Null
           $p = Start-Process -FilePath $env:APP -PassThru
           Start-Sleep -Seconds 10
           if ($p.HasExited) { throw "Burno exited with code $($p.ExitCode)" }
+          if (-not (Test-Path "$env:APPDATA\com.burno.app\collections\My Collection\burno.json")) { throw "Default collection not created" }
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
           $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
@@ -57,7 +58,14 @@ jobs:
           Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force
           Start-Sleep -Seconds 3
 
-      - name: Test the installed app
+      # Tauri's own WebView2 arguments win over environment variables, so opening
+      # the debugging port takes a copy built with that one setting added.
+      - name: Build a test copy with the debugging port open
+        run: npx tauri build --no-bundle --config scripts/tauri.e2e.conf.json
+
+      - name: Test the app
+        env:
+          APP: ${{ github.workspace }}\src-tauri\target\release\burno.exe
         run: node scripts/windows-e2e.mjs
 
       - uses: actions/upload-artifact@v4

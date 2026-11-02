@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <g stroke="#000" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <!-- tiny body -->
+    <g transform="translate(72,143) scale(.72)" stroke-width="19">
+      <path d="M116 392 C76 372 62 322 74 272 C76 262 66 256 59 262 C20 292 12 352 40 396 C52 414 82 424 104 424 Z" fill="#E9A552"/>
+      <path d="M150 318 C100 322 62 374 66 440 C68 464 76 480 94 488 L190 488 Z" fill="#E9A552"/>
+      <path d="M362 318 C412 322 450 374 446 440 C444 464 436 480 418 488 L322 488 Z" fill="#E9A552"/>
+      <path d="M178 225 C150 290 130 350 132 420 C132 452 138 480 150 502 L362 502 C374 480 380 452 380 420 C382 350 362 290 334 225 Z" fill="#E9A552"/>
+      <path d="M90 464 C62 464 54 503 84 503 L176 503 C204 503 200 464 172 464 Z" fill="#E9A552"/>
+      <path d="M422 464 C450 464 458 503 428 503 L336 503 C308 503 312 464 340 464 Z" fill="#E9A552"/>
+      <path d="M228 276 C226 316 208 340 198 370 C190 396 208 430 256 430 C304 430 322 396 314 370 C304 340 286 316 284 276 Z" fill="#F5DDD0"/>
+      <path d="M204 400 C196 430 196 450 194 470 C170 474 172 503 196 503 L240 503 C262 503 264 474 240 470 C240 450 240 430 236 412" fill="#E9A552"/>
+      <path d="M276 412 C272 430 272 450 272 470 C248 474 250 503 272 503 L316 503 C340 503 342 474 318 470 C316 450 316 430 308 400" fill="#E9A552"/>
+      <path d="M168 212 C190 262 322 262 344 212 L350 244 C322 296 190 296 162 244 Z" fill="#2F9BE8"/>
+    </g>
+    <!-- huge tilted head -->
+    <g transform="translate(256,160) rotate(-14) scale(1.15) translate(-256,-127)" stroke-width="12">
+      <path d="M336 26 C386 14 432 36 446 84 C458 128 436 172 396 196 C380 204 368 194 364 176 C358 134 358 88 322 48 C314 38 322 28 336 26 Z" fill="#E9A552"/>
+      <path d="M256 12 C336 12 382 62 382 128 C382 196 330 242 256 242 C182 242 130 196 130 128 C130 62 176 12 256 12 Z" fill="#E9A552"/>
+      <path d="M256 104 C238 104 234 116 228 136 C196 148 170 172 174 204 C178 238 220 254 256 254 C292 254 338 238 342 204 C346 172 314 148 284 136 C278 116 274 104 256 104 Z" fill="#F5DDD0"/>
+      <!-- ear sticking straight up -->
+      <path d="M190 34 C170 0 130 -20 100 -6 C84 4 90 24 102 34 C120 52 135 64 150 72 Z" fill="#C97F3A"/>
+      <!-- giant mismatched eyes, tiny pupils pointing away from each other -->
+      <circle cx="182" cy="92" r="54" fill="#fff"/>
+      <circle cx="332" cy="106" r="34" fill="#fff"/>
+      <circle cx="146" cy="118" r="9" fill="#000" stroke="none"/>
+      <circle cx="350" cy="86" r="7.5" fill="#000" stroke="none"/>
+      <!-- gaping mouth -->
+      <path d="M196 180 C226 194 290 192 322 174 C330 234 286 248 256 248 C222 248 194 232 196 180 Z" fill="#6B1F1F"/>
+      <!-- crooked teeth -->
+      <path d="M228 190 L230 226 L252 226 L252 192 Z" fill="#fff" stroke-width="7"/>
+      <path d="M262 192 L264 210 L284 208 L282 188 Z" fill="#fff" stroke-width="7"/>
+      <!-- nose -->
+      <path d="M232 150 C232 140 280 140 280 150 C280 168 264 178 256 178 C248 178 232 168 232 150 Z" fill="#7A3E1D"/>
+      <!-- snot bubble -->
+      <circle cx="296" cy="146" r="26" fill="#BFE8FF" stroke-width="8"/>
+      <path d="M284 138 C287 132 292 130 297 130" fill="none" stroke="#fff" stroke-width="6"/>
+    </g>
+    <!-- very long tongue -->
+    <path d="M296 262 C310 250 350 245 358 262 C372 310 382 380 360 418 C345 440 318 432 312 405 C305 360 305 310 296 262 Z" fill="#FF6464"/>
+    <path d="M330 280 C336 320 340 360 340 392" fill="none" stroke-width="8"/>
+    <!-- drool -->
+    <path d="M214 278 C210 310 208 330 206 345 C196 360 204 378 216 376 C230 374 230 356 220 345 C222 325 224 300 226 278 Z" fill="#BFE8FF" stroke-width="9"/>
+  </g>
+</svg>

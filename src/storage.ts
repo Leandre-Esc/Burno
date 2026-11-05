@@ -137,7 +137,7 @@ const AUTH_SLOTS: { key: string; get: (a: Auth) => string | undefined; set: (a: 
 ];
 
 /** `{{token}}` holds no secret and is worth sharing; anything else typed in these fields is a credential. */
-const isOnlyVariables = (value: string) => /^(\s*\{\{[^{}]+\}\}\s*)+$/.test(value);
+export const isOnlyVariables = (value: string) => /^(\s*\{\{[^{}]+\}\}\s*)+$/.test(value);
 
 const loadAllAuthValues = () => load<Record<string, AuthValues>>(KEYS.authSecrets, {});
 

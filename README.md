@@ -35,6 +35,14 @@ Output goes to `src-tauri/target/release/bundle/` (.dmg/.app on macOS, .msi/.exe
 - Per-request settings: timeout, follow redirects, verify SSL
 - Response: status, time, size, pretty JSON, headers, and the exact request sent
 
+## Working with a team
+
+- **Protected environments**: an environment named `prod`, `production` or `live` (or marked with the Protect button) turns the request bar red, and Burno asks before sending anything but GET, HEAD and OPTIONS. The setting is saved in the environment file, so the whole team shares it.
+- **Search everything**: `⌘K` / `Ctrl K` finds requests in every open collection by name, URL, method or folder, switches environments and runs common actions.
+- **Import**: cURL commands, Postman collections (v2.0, v2.1) and environments, Insomnia exports (v4, v5), OpenAPI 3 and Swagger 2, from a file or pasted. Pasting a cURL command in the URL field fills in the current request.
+  - Credentials follow the same rule as everywhere else: they stay on this machine. `Authorization` and API key headers move to the Auth tab, and variables that look like credentials become secrets. Burno warns about the ones it can't move (a cookie, a token in the URL…).
+  - Not imported: scripts, file bodies, gRPC and WebSocket requests. Each import lists what it left out.
+
 ## Collections on disk
 
 A collection is a plain folder you can commit to git:

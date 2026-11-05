@@ -1,9 +1,9 @@
-import { Check, Copy, FileKey2, Globe, Layers, Library, ListTree, Lock, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, Copy, FileKey2, Globe, Layers, Library, ListTree, Lock, Plus, RefreshCw, ShieldAlert, Trash2, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { Collection } from "../collections";
 import type { EnvironmentsState } from "../environments";
 import { DYNAMIC, SOURCE_LABELS, type Scope } from "../interpolate";
-import type { Environment, Variable } from "../types";
+import { isProtected, type Environment, type Variable } from "../types";
 import { Dropdown } from "./Dropdown";
 import { KeyValueEditor } from "./KeyValueEditor";
 import { ScopeContext } from "./VarInput";
@@ -44,9 +44,17 @@ function NameInput({ value, onCommit }: { value: string; onCommit: (name: string
   );
 }
 
-function EnvActions({ active, onToggle, onClone, onDelete }: { active: boolean; onToggle: () => void; onClone: () => void; onDelete: () => void }) {
+function EnvActions({ env, active, onToggle, onProtect, onClone, onDelete }: { env: Environment; active: boolean; onToggle: () => void; onProtect: (on: boolean) => void; onClone: () => void; onDelete: () => void }) {
+  const guarded = isProtected(env);
   return (
     <>
+      <button
+        className={`btn ${guarded ? "btn-guarded" : ""}`}
+        onClick={() => onProtect(!guarded)}
+        title={guarded ? "Asks before sending anything but GET, HEAD and OPTIONS. Click to stop asking." : "Ask before sending anything but GET, HEAD and OPTIONS"}
+      >
+        <ShieldAlert size={14} /> {guarded ? "Protected" : "Protect"}
+      </button>
       <button className={`btn ${active ? "btn-active" : ""}`} onClick={onToggle} title={active ? "Deactivate" : "Use this environment"}>
         <Check size={14} /> {active ? "Active" : "Activate"}
       </button>
@@ -163,7 +171,9 @@ export function EnvironmentModal({ envs, collections, onCollectionVariables, ini
             onCommit={async (name) => setSelection({ kind: "env", id: await envs.collection.rename(root, selectedEnv, name) })}
           />
           <EnvActions
+            env={selectedEnv}
             active={active}
+            onProtect={(on) => envs.collection.update(root, { ...selectedEnv, protected: on })}
             onToggle={() => envs.collection.setActive(root, active ? null : selectedEnv.id)}
             onClone={async () => {
               const id = await envs.collection.clone(root, selectedEnv);
@@ -198,7 +208,9 @@ export function EnvironmentModal({ envs, collections, onCollectionVariables, ini
             onCommit={(name) => envs.global.update({ ...selectedGlobal, name })}
           />
           <EnvActions
+            env={selectedGlobal}
             active={envs.activeGlobal?.id === selectedGlobal.id}
+            onProtect={(on) => envs.global.update({ ...selectedGlobal, protected: on })}
             onToggle={() => envs.global.setActive(envs.activeGlobal?.id === selectedGlobal.id ? null : selectedGlobal.id)}
             onClone={() => setGlobalId(envs.global.clone(selectedGlobal))}
             onDelete={async () => {

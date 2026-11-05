@@ -22,6 +22,7 @@ import {
   withAuthSecrets,
   withSecrets,
 } from "./storage";
+import { planFiles, safeName, type ImportBundle } from "./import";
 import { newRequest, withEmptyRow, type OAuth2Token, type RequestItem, type Variable } from "./types";
 
 export interface FolderNode {
@@ -321,6 +322,62 @@ export function useCollections() {
     setVariables,
 
     select: (id: string) => setActiveId(id),
+
+    /** Opens a request found elsewhere than in the tree: unfolds what leads to it. */
+    reveal: (id: string) => {
+      const [root, path] = splitKey(id);
+      expand(root, parentDir(path));
+      setActiveId(id);
+    },
+
+    /**
+     * Writes an import to disk, in a new collection when `target` is null.
+     * Goes through the same rules as any edit: credentials stay on this machine.
+     * Returns the collection root, or null if nothing was imported.
+     */
+    importBundle: async (bundle: ImportBundle, target: string | null): Promise<string | null> => {
+      try {
+        await flush();
+        let root = target;
+        if (!root) {
+          const parent = await open({ directory: true, title: "Choose where to create the collection" });
+          if (typeof parent !== "string") return null;
+          root = await collectionApi.create(parent, safeName(bundle.name));
+          await collectionApi.rename(root, bundle.name);
+        }
+        // Several requests stay together when added to an existing collection
+        const wrap = !!target && bundle.requests.length > 1;
+        const items = wrap ? bundle.requests.map((r) => ({ ...r, folder: [bundle.name, ...r.folder] })) : bundle.requests;
+        const existing = target ? (loaded[target]?.children ?? []).map((n) => baseName(n.path)) : [];
+        const plan = planFiles(items, "", existing);
+        for (const folder of plan.folders) await collectionApi.createFolder(root, folder);
+        const written: string[] = [];
+        for (const { path, request } of plan.files) {
+          if (!saveAuthSecrets(request.uid, request.auth)) {
+            report(new Error(`Could not store the credentials of "${request.name}" on this machine: it was not imported.`));
+            continue;
+          }
+          await collectionApi.createRequest(root, path, toFile(request));
+          written.push(path);
+        }
+        if (bundle.variables.length) {
+          const raw = await collectionApi.load(root);
+          const current = withSecrets(varsOwner(root), withEmptyRow<Variable>(raw.variables)).filter((v) => v.key);
+          // A variable already defined here keeps its value
+          const merged = [...current, ...bundle.variables.filter((v) => !current.some((c) => c.key === v.key))];
+          saveSecrets(varsOwner(root), merged);
+          await envApi.setCollectionVariables(root, stripSecrets(merged));
+        }
+        await reload(root);
+        if (!target) setRoots((rs) => [...rs, root]);
+        expand(root, written[0] ? parentDir(written[0]) : "");
+        if (written[0]) setActiveId(nodeKey(root, written[0]));
+        return root;
+      } catch (e) {
+        report(e);
+        return null;
+      }
+    },
 
     toggle: (key: string) =>
       setExpanded((ex) => {

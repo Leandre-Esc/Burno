@@ -1,3 +1,4 @@
+import { ask } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
@@ -12,12 +13,15 @@ import { isMac } from "./platform";
 import { prepareRequest } from "./prepare";
 import { slime } from "./sounds";
 import { loadSounds, loadSplit, loadTheme, saveSounds, saveSplit, saveTheme } from "./storage";
-import type { HttpResponse } from "./types";
+import { safeName, type ImportBundle } from "./import";
+import { SAFE_METHODS, type HttpResponse } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { RequestBar } from "./components/RequestBar";
 import { RequestEditor } from "./components/RequestEditor";
 import { ResponseViewer } from "./components/ResponseViewer";
 import { EnvironmentModal, type EnvTab } from "./components/EnvironmentModal";
+import { CommandPalette } from "./components/CommandPalette";
+import { ImportModal } from "./components/ImportModal";
 import { ScopeContext } from "./components/VarInput";
 import { BurnedOverlay, type Burn } from "./components/BurnedOverlay";
 
@@ -28,6 +32,8 @@ function App() {
   const { active, activeId, updateRequest } = collections;
   const envs = useEnvironments(collections.collections, collections.report);
   const [envModal, setEnvModal] = useState<EnvTab | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [theme, setTheme] = useState(loadTheme);
   const [split, setSplit] = useState(loadSplit);
   const [sounds, setSounds] = useState(loadSounds);
@@ -38,6 +44,9 @@ function App() {
   const [burn, setBurn] = useState<Burn | null>(null);
   const closeBurn = useCallback(() => setBurn(null), []);
   const closeEnvModal = useCallback(() => setEnvModal(null), []);
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
+  const closeImport = useCallback(() => setImportOpen(false), []);
+  const confirming = useRef(false);
   const workspace = useRef<HTMLDivElement>(null);
   const noRequestLine = useMemo(fun.noRequest, [activeId]);
 
@@ -59,9 +68,27 @@ function App() {
   const root = activeId ? rootOf(activeId) : (collections.collections[0]?.root ?? null);
   const scope = envs.scopeFor(root, active);
   const vars = scopeVars(scope);
+  const protectedEnv = envs.protectedEnv(root);
 
   const send = async () => {
-    if (!active || loading) return;
+    if (!active || loading || confirming.current) return;
+    if (protectedEnv && !SAFE_METHODS.includes(active.method)) {
+      confirming.current = true;
+      const yes = await ask(`${active.method} ${interpolate(active.url, vars)}\n\nThis can change data on ${protectedEnv.name}.`, {
+        title: `Send to ${protectedEnv.name}?`,
+        kind: "warning",
+        okLabel: `Send to ${protectedEnv.name}`,
+        cancelLabel: "Cancel",
+      })
+        .catch((e) => {
+          collections.report(e);
+          return false;
+        })
+        .finally(() => {
+          confirming.current = false;
+        });
+      if (!yes) return;
+    }
     slime();
     setLoading(true);
     setError(null);
@@ -90,14 +117,19 @@ function App() {
     }
   };
 
-  // ⌘↵ / Ctrl+↵ sends from anywhere
+  // ⌘↵ / Ctrl+↵ sends from anywhere but a dialog, ⌘K / Ctrl+K searches
   const sendRef = useRef(send);
   sendRef.current = send;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key === "Enter" && !document.querySelector(".modal-backdrop")) {
         e.preventDefault();
         sendRef.current();
+      }
+      if (e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -121,6 +153,13 @@ function App() {
 
   const firstCollection = collections.collections[0];
 
+  const runImport = async (bundle: ImportBundle, target: string | null) => {
+    const imported = await collections.actions.importBundle(bundle, target);
+    if (!imported) return false;
+    for (const env of bundle.environments) await envs.collection.create(imported, safeName(env.name), env.variables);
+    return true;
+  };
+
   return (
     <div className="app">
       <Sidebar
@@ -128,6 +167,8 @@ function App() {
         envs={envs}
         envRoot={root}
         onManageEnvironments={setEnvModal}
+        onImport={() => setImportOpen(true)}
+        onOpenPalette={() => setPaletteOpen(true)}
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
         sounds={sounds}
@@ -141,6 +182,8 @@ function App() {
                 request={active}
                 breadcrumb={collections.breadcrumb}
                 loading={loading}
+                protectedEnv={protectedEnv?.name ?? null}
+                onNotice={collections.report}
                 onChange={updateRequest}
                 onSend={send}
               />
@@ -178,6 +221,19 @@ function App() {
           initialRoot={root}
           initialTab={envModal}
           onClose={closeEnvModal}
+        />
+      )}
+      {importOpen && (
+        <ImportModal collections={collections.collections} activeRoot={activeId ? root : null} onImport={runImport} onClose={closeImport} />
+      )}
+      {paletteOpen && (
+        <CommandPalette
+          collections={collections}
+          envs={envs}
+          root={root}
+          onImport={() => setImportOpen(true)}
+          onManageEnvironments={() => setEnvModal("collection")}
+          onClose={closePalette}
         />
       )}
       {burn && <BurnedOverlay burn={burn} onClose={closeBurn} />}

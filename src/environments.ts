@@ -15,7 +15,7 @@ import {
   stripSecrets,
   withSecrets,
 } from "./storage";
-import { emptyRow, newEnvironment, withEmptyRow, type Environment, type RequestItem, type Variable } from "./types";
+import { emptyRow, isProtected, newEnvironment, withEmptyRow, type Environment, type RequestItem, type Variable } from "./types";
 
 /** Environments of one collection; their id is the file name in `environments/` */
 export interface CollectionEnvs {
@@ -36,7 +36,7 @@ function uniqueName(envs: Environment[], base: string) {
   }
 }
 
-const toFile = (env: Environment) => ({ uid: env.uid, name: env.name, variables: stripSecrets(env.variables) });
+const toFile = (env: Environment) => ({ uid: env.uid, name: env.name, protected: env.protected, variables: stripSecrets(env.variables) });
 
 /** Global environments (on this machine) and per-collection environments (on disk). */
 export function useEnvironments(collections: Collection[], report: (e: unknown) => void) {
@@ -64,6 +64,7 @@ export function useEnvironments(collections: Collection[], report: (e: unknown) 
         // No uid yet, or a file copied by hand
         uid: d.uid && !seenUids.has(d.uid) ? d.uid : crypto.randomUUID(),
         name: d.name || file.replace(/\.json$/, ""),
+        protected: typeof d.protected === "boolean" ? d.protected : undefined,
         variables: withSecrets(owner(root, file), variables),
       };
       seenUids.add(env.uid);
@@ -216,6 +217,10 @@ export function useEnvironments(collections: Collection[], report: (e: unknown) 
   const activeCollectionEnv = (root: string | null) =>
     (root && byRoot[root]?.environments.find((e) => e.id === activeByRoot[root])) || null;
 
+  /** The active environment that asks before changing data, if any */
+  const protectedEnv = (root: string | null) =>
+    [activeCollectionEnv(root), activeGlobal].find((env) => env && isProtected(env)) ?? null;
+
   /**
    * Every variable visible from a request, lowest precedence first:
    * global env < collection variables < collection env < request variables.
@@ -238,6 +243,7 @@ export function useEnvironments(collections: Collection[], report: (e: unknown) 
     byRoot,
     activeByRoot,
     activeCollectionEnv,
+    protectedEnv,
     scopeFor,
     collection,
     global,

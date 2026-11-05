@@ -99,9 +99,19 @@ export interface Environment {
   id: string;
   /** Stable identity saved in collection environment files */
   uid?: string;
+  /** Asks before changing data. Unset: decided from the name */
+  protected?: boolean;
   name: string;
   variables: Variable[];
 }
+
+const PRODUCTION_NAME = /\b(prod|production|live)\b/i;
+
+/** Production-looking environments are protected until someone says otherwise. */
+export const isProtected = (env: Environment) => env.protected ?? PRODUCTION_NAME.test(env.name);
+
+/** Methods that are not meant to change anything: no need to ask before sending them */
+export const SAFE_METHODS: readonly Method[] = ["GET", "HEAD", "OPTIONS"];
 
 export interface HttpResponse {
   status: number;

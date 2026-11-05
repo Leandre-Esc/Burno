@@ -4,6 +4,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  Import,
   Library,
   LogOut,
   Moon,
@@ -19,6 +20,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import logo from "../assets/logo.png";
 import { baseName, nodeKey, type Collection, type CollectionsState, type TreeNode } from "../collections";
 import { fun } from "../fun";
+import { searchShortcut } from "../platform";
 import type { Theme } from "../storage";
 import type { EnvironmentsState } from "../environments";
 import type { RequestItem } from "../types";
@@ -31,6 +33,8 @@ interface Props {
   /** Collection whose environments the picker shows */
   envRoot: string | null;
   onManageEnvironments: (tab: EnvTab) => void;
+  onImport: () => void;
+  onOpenPalette: () => void;
   theme: Theme;
   sounds: boolean;
   onToggleSounds: () => void;
@@ -229,7 +233,7 @@ function CollectionRow({ state, collection, isOpen }: { state: CollectionsState;
   );
 }
 
-export function Sidebar({ state, envs, envRoot, onManageEnvironments, theme, onToggleTheme, sounds, onToggleSounds }: Props) {
+export function Sidebar({ state, envs, envRoot, onManageEnvironments, onImport, onOpenPalette, theme, onToggleTheme, sounds, onToggleSounds }: Props) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
 
@@ -256,6 +260,7 @@ export function Sidebar({ state, envs, envRoot, onManageEnvironments, theme, onT
       <div className="search">
         <Search size={14} />
         <input className="input" placeholder="Search requests" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <button className="search-kbd" title="Search everything" onClick={onOpenPalette}><kbd>{searchShortcut}</kbd></button>
       </div>
 
       <div className="section-title">
@@ -263,6 +268,7 @@ export function Sidebar({ state, envs, envRoot, onManageEnvironments, theme, onT
         <span className="section-actions">
           <button className="icon-btn" title="New collection" onClick={state.actions.newCollection}><Plus size={15} /></button>
           <button className="icon-btn" title="Open collection" onClick={state.actions.openCollection}><FolderOpen size={15} /></button>
+          <button className="icon-btn" title="Import from cURL, Postman, Insomnia or OpenAPI" onClick={onImport}><Import size={15} /></button>
         </span>
       </div>
 

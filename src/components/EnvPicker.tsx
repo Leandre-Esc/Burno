@@ -51,7 +51,7 @@ export function EnvPicker({ envs, root, collectionName, onManage }: Props) {
 
   return (
     <div className="env-picker-wrap" ref={ref}>
-      <button className={`env-picker ${colEnv || global ? "active" : ""}`} onClick={() => setOpen((o) => !o)} title="Environments">
+      <button className={`env-picker ${colEnv || global ? "active" : ""} ${envs.protectedEnv(root) ? "guarded" : ""}`} onClick={() => setOpen((o) => !o)} title="Environments">
         <Globe size={14} />
         <span className="env-picker-labels">
           <span className={colEnv ? "" : "muted"}>{colEnv?.name ?? "No environment"}</span>

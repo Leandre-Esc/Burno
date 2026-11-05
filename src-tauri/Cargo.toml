@@ -26,6 +26,8 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 tokio = { version = "1", features = ["sync"] }
 tauri-plugin-dialog = "2"
 trash = "5"
+notify-debouncer-mini = "0.7.0"
+uuid = { version = "1.29.0", features = ["v4"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { HttpResponse, RequestSettings } from "./types";
 
 /** Body as understood by the Rust `send_request` command */
@@ -63,7 +64,14 @@ export const collectionApi = {
   createFolder: (root: string, path: string) => invoke<void>("folder_create", { root, path }),
   renameEntry: (root: string, from: string, to: string) => invoke<void>("entry_rename", { root, from, to }),
   deleteEntry: (root: string, path: string) => invoke<void>("entry_delete", { root, path }),
+  watch: (roots: string[]) => invoke<void>("collections_watch", { roots }),
 };
+
+/** Calls back with the root of a collection changed outside the app. Returns the unsubscribe function. */
+export function onCollectionChanged(callback: (root: string) => void): () => void {
+  const unlisten = listen<string>("collection-changed", (e) => callback(e.payload));
+  return () => void unlisten.then((stop) => stop());
+}
 
 /** Collection environments (`environments/<file>`), `.env` and collection variables. */
 export const envApi = {

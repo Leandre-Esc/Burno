@@ -1,4 +1,4 @@
-import { newRequest, withEmptyRow, type BodyMode, type Environment, type OAuth2Token, type RequestItem, type Variable } from "./types";
+import { newRequest, withEmptyRow, type Auth, type BodyMode, type Environment, type OAuth2Token, type RequestItem, type Variable } from "./types";
 import { paramsFromUrl } from "./url";
 
 const KEYS = {
@@ -12,6 +12,7 @@ const KEYS = {
   tokens: "burno.tokens",
   activeCollectionEnvs: "burno.activeCollectionEnvs",
   secrets: "burno.secrets",
+  authSecrets: "burno.authSecrets",
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -116,9 +117,68 @@ export function saveToken(id: string, token: OAuth2Token | null) {
   save(KEYS.tokens, tokens);
 }
 
-export function moveTokens(rename: (id: string) => string) {
-  const tokens = loadTokens();
-  save(KEYS.tokens, Object.fromEntries(Object.entries(tokens).map(([id, t]) => [rename(id), t])));
+// Credentials typed in a request's Auth tab stay on this machine, keyed by request uid
+type AuthValues = Record<string, string>;
+
+const AUTH_SLOTS: { key: string; get: (a: Auth) => string | undefined; set: (a: Auth, v: string) => Auth }[] = [
+  { key: "basicPassword", get: (a) => a.basic?.password, set: (a, v) => ({ ...a, basic: { ...a.basic, password: v } }) },
+  { key: "bearerToken", get: (a) => a.bearer?.token, set: (a, v) => ({ ...a, bearer: { ...a.bearer, token: v } }) },
+  { key: "apikeyValue", get: (a) => a.apikey?.value, set: (a, v) => ({ ...a, apikey: { ...a.apikey, value: v } }) },
+  {
+    key: "oauthClientSecret",
+    get: (a) => a.oauth2?.clientSecret,
+    set: (a, v) => ({ ...a, oauth2: { ...a.oauth2, clientSecret: v } }),
+  },
+  {
+    key: "oauthPassword",
+    get: (a) => a.oauth2?.password,
+    set: (a, v) => ({ ...a, oauth2: { ...a.oauth2, password: v } }),
+  },
+];
+
+/** `{{token}}` holds no secret and is worth sharing; anything else typed in these fields is a credential. */
+const isOnlyVariables = (value: string) => /^(\s*\{\{[^{}]+\}\}\s*)+$/.test(value);
+
+const loadAllAuthValues = () => load<Record<string, AuthValues>>(KEYS.authSecrets, {});
+
+/** The credentials of an Auth that must not reach a file. */
+export function authSecretsOf(auth: Auth): AuthValues {
+  const values: AuthValues = {};
+  for (const slot of AUTH_SLOTS) {
+    const value = slot.get(auth);
+    if (value && !isOnlyVariables(value)) values[slot.key] = value;
+  }
+  return values;
+}
+
+/** What goes in a file: credentials blanked out, variable references kept. */
+export function stripAuthSecrets(auth: Auth): Auth {
+  const secrets = authSecretsOf(auth);
+  return AUTH_SLOTS.reduce((a, slot) => (secrets[slot.key] ? slot.set(a, "") : a), auth);
+}
+
+/** Fills the fields left empty in a file with the values of this machine. A value in the file wins. */
+export function withAuthSecrets(auth: Auth, uid: string): Auth {
+  const values = loadAllAuthValues()[uid] ?? {};
+  return AUTH_SLOTS.reduce((a, slot) => (!slot.get(a) && values[slot.key] ? slot.set(a, values[slot.key]) : a), auth);
+}
+
+/** Returns false if the values could not be stored, so callers never blank a file's only copy. */
+export function saveAuthSecrets(uid: string, auth: Auth): boolean {
+  const all = loadAllAuthValues();
+  const values = authSecretsOf(auth);
+  if (Object.keys(values).length) all[uid] = values;
+  else delete all[uid];
+  save(KEYS.authSecrets, all);
+  return JSON.stringify(loadAllAuthValues()[uid] ?? {}) === JSON.stringify(values);
+}
+
+/** Forgets the credentials and token of a request deleted from the app. */
+export function forgetRequestSecrets(uid: string) {
+  const all = loadAllAuthValues();
+  delete all[uid];
+  save(KEYS.authSecrets, all);
+  saveToken(uid, null);
 }
 
 export type Theme = "dark" | "light";

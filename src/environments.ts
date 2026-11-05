@@ -1,6 +1,6 @@
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
-import { envApi } from "./api";
+import { envApi, onCollectionChanged } from "./api";
 import { nodeKey, type Collection } from "./collections";
 import { buildScope, type Layer, type Scope } from "./interpolate";
 import {
@@ -36,7 +36,7 @@ function uniqueName(envs: Environment[], base: string) {
   }
 }
 
-const toFile = (env: Environment) => ({ name: env.name, variables: stripSecrets(env.variables) });
+const toFile = (env: Environment) => ({ uid: env.uid, name: env.name, variables: stripSecrets(env.variables) });
 
 /** Global environments (on this machine) and per-collection environments (on disk). */
 export function useEnvironments(collections: Collection[], report: (e: unknown) => void) {
@@ -54,13 +54,41 @@ export function useEnvironments(collections: Collection[], report: (e: unknown) 
 
   const reload = async (root: string) => {
     const raw = await envApi.list(root);
-    const environments = raw.environments.map(({ file, data }) => {
+    const seenUids = new Set<string>();
+    const migrations: Environment[] = [];
+    const environments = raw.environments.map(({ file, data }): Environment => {
       const d = (data ?? {}) as Partial<Environment>;
       const variables = withEmptyRow<Variable>(d.variables);
-      return { id: file, name: d.name || file.replace(/\.json$/, ""), variables: withSecrets(owner(root, file), variables) };
+      const env = {
+        id: file,
+        // No uid yet, or a file copied by hand
+        uid: d.uid && !seenUids.has(d.uid) ? d.uid : crypto.randomUUID(),
+        name: d.name || file.replace(/\.json$/, ""),
+        variables: withSecrets(owner(root, file), variables),
+      };
+      seenUids.add(env.uid);
+      if (env.uid !== d.uid) migrations.push(env);
+      return env;
     });
-    setByRoot((b) => ({ ...b, [root]: { environments, dotenv: raw.dotenv } }));
+    setByRoot((b) => {
+      // Edits not written yet win over what is still on disk
+      const pending = (env: Environment) => timers.current.has(owner(root, env.id));
+      const merged = environments.map((env) =>
+        pending(env) ? (b[root]?.environments.find((e) => e.id === env.id) ?? env) : env,
+      );
+      return { ...b, [root]: { environments: merged, dotenv: raw.dotenv } };
+    });
+    for (const env of migrations) {
+      if (!timers.current.has(owner(root, env.id))) await envApi.write(root, env.id, toFile(env));
+    }
   };
+
+  useEffect(() => {
+    const stop = onCollectionChanged((root) => {
+      reload(root).catch(report);
+    });
+    return () => stop();
+  }, []);
 
   const rootsKey = collections.map((c) => c.root).join("\n");
   useEffect(() => {
@@ -96,7 +124,7 @@ export function useEnvironments(collections: Collection[], report: (e: unknown) 
       try {
         await flush(root);
         const name = uniqueName(latest.current[root]?.environments ?? [], base);
-        const env = { id: fileOf(name), name, variables };
+        const env = { id: fileOf(name), uid: crypto.randomUUID(), name, variables };
         saveSecrets(owner(root, env.id), variables);
         await envApi.write(root, env.id, toFile(env), true);
         await reload(root);
@@ -115,13 +143,16 @@ export function useEnvironments(collections: Collection[], report: (e: unknown) 
       const key = owner(root, env.id);
       saveSecrets(key, env.variables);
       clearTimeout(timers.current.get(key));
-      timers.current.set(
-        key,
-        window.setTimeout(() => {
-          timers.current.delete(key);
-          envApi.write(root, env.id, toFile(env)).catch(report);
-        }, SAVE_DELAY_MS),
-      );
+      const timer = window.setTimeout(() => {
+        // Stays pending until written, so a reload can't bring back older content meanwhile
+        envApi
+          .write(root, env.id, toFile(env))
+          .catch(report)
+          .finally(() => {
+            if (timers.current.get(key) === timer) timers.current.delete(key);
+          });
+      }, SAVE_DELAY_MS);
+      timers.current.set(key, timer);
     },
 
     /** Renames the environment and its file; returns the new id */

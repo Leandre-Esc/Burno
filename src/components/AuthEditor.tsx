@@ -44,7 +44,7 @@ export function AuthEditor({ auth, vars, settings, onChange }: Props) {
 
       {auth.type === "bearer" && (
         <Field label="Token">
-          <TextInput value={auth.bearer.token} placeholder="{{token}}" onChange={(token) => setBearer({ token })} />
+          <TextInput secret value={auth.bearer.token} placeholder="{{token}}" onChange={(token) => setBearer({ token })} />
         </Field>
       )}
 
@@ -76,6 +76,13 @@ export function AuthEditor({ auth, vars, settings, onChange }: Props) {
           settings={settings}
           onChange={(oauth2) => onChange({ ...auth, oauth2 })}
         />
+      )}
+
+      {auth.type !== "none" && (
+        <p className="hint">
+          Passwords, tokens and secrets typed here stay on this machine. Use a <code>{"{{variable}}"}</code> to share them
+          through an environment.
+        </p>
       )}
     </div>
   );

@@ -78,7 +78,10 @@ export interface RequestSettings {
 }
 
 export interface RequestItem {
+  /** In-memory key: "<root>::<path>", changes when the file moves */
   id: string;
+  /** Stable identity saved in the file: survives renames, moves and git operations */
+  uid: string;
   name: string;
   method: Method;
   url: string;
@@ -94,6 +97,8 @@ export interface RequestItem {
 /** Global environments use a uuid as id; collection environments their file name. */
 export interface Environment {
   id: string;
+  /** Stable identity saved in collection environment files */
+  uid?: string;
   name: string;
   variables: Variable[];
 }
@@ -150,6 +155,7 @@ export function defaultAuth(): Auth {
 export function newRequest(): RequestItem {
   return {
     id: crypto.randomUUID(),
+    uid: crypto.randomUUID(),
     name: "New Request",
     method: "GET",
     url: "https://jsonplaceholder.typicode.com/todos/1",

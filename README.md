@@ -52,7 +52,9 @@ My API/
 ```
 
 - Edits are saved automatically (400 ms after you stop typing).
-- OAuth tokens and secret variable values are **not** written to these files; they stay on this machine.
+- OAuth tokens, secret variable values and credentials typed in the Auth tab (Basic password, Bearer token, API key value, OAuth client secret and password) are **not** written to these files; they stay on this machine. A value that is only a `{{variable}}` reference is kept in the file. A file that still holds credentials is cleaned up when opened.
+- Requests, environments and collections have a `uid` that survives renames and moves.
+- The app follows changes made on disk (git pull, another editor…) and reloads what changed. An edit not saved yet wins over the file.
 - Variable precedence, highest first: request variables › collection environment › collection variables › global environment.
 - The first launch creates `My Collection` in the app data folder
   (`~/Library/Application Support/com.burno.app/collections` on macOS) and moves older requests into it.

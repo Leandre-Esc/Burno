@@ -1,4 +1,5 @@
 mod collections;
+mod watcher;
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -183,6 +184,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(watcher::CollectionWatcher::default())
         .invoke_handler(tauri::generate_handler![
             send_request,
             oauth2_authorize,
@@ -200,6 +202,7 @@ pub fn run() {
             collections::env_write,
             collections::env_rename,
             collections::env_delete,
+            watcher::collections_watch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

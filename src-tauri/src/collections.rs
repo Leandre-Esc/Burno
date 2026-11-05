@@ -8,6 +8,8 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
+use crate::watcher;
+
 const META_FILE: &str = "burno.json";
 const ENV_DIR: &str = "environments";
 const SKIPPED_DIRS: [&str; 3] = ["node_modules", "environments", "target"];
@@ -88,7 +90,15 @@ fn read_meta(dir: &Path) -> Value {
 fn set_meta(dir: &Path, key: &str, value: Value) -> Res<()> {
     let mut meta = read_meta(dir);
     meta[key] = value;
-    fs::write(dir.join(META_FILE), serde_json::to_string_pretty(&meta).map_err(err)?).map_err(err)
+    watcher::write_file(&dir.join(META_FILE), &serde_json::to_string_pretty(&meta).map_err(err)?).map_err(err)
+}
+
+/// Gives the collection a stable identity: its path differs on every machine.
+fn ensure_uid(dir: &Path) -> Res<()> {
+    if read_meta(dir)["uid"].is_string() {
+        return Ok(());
+    }
+    set_meta(dir, "uid", json!(uuid::Uuid::new_v4().to_string()))
 }
 
 fn write_meta(dir: &Path, name: &str) -> Res<()> {
@@ -158,6 +168,8 @@ fn to_json(data: &Value) -> Res<String> {
 #[tauri::command]
 pub fn collection_load(root: String) -> Res<Collection> {
     let dir = resolve(&root, "")?;
+    // A read-only collection still opens
+    let _ = ensure_uid(&dir);
     let meta = read_meta(&dir);
     let name = meta["name"]
         .as_str()
@@ -179,6 +191,7 @@ pub fn collection_create(parent: String, name: String) -> Res<String> {
     }
     fs::create_dir_all(&dir).map_err(err)?;
     write_meta(&dir, &name)?;
+    ensure_uid(&dir)?;
     Ok(dir.to_string_lossy().to_string())
 }
 
@@ -204,12 +217,12 @@ pub fn request_create(root: String, path: String, data: Value) -> Res<()> {
     if file.exists() {
         return Err(format!("{path} already exists"));
     }
-    fs::write(file, to_json(&data)?).map_err(err)
+    watcher::write_file(&file, &to_json(&data)?).map_err(err)
 }
 
 #[tauri::command]
 pub fn request_write(root: String, path: String, data: Value) -> Res<()> {
-    fs::write(resolve(&root, &path)?, to_json(&data)?).map_err(err)
+    watcher::write_file(&resolve(&root, &path)?, &to_json(&data)?).map_err(err)
 }
 
 #[tauri::command]
@@ -277,7 +290,7 @@ pub fn env_write(root: String, file: String, data: Value, create: bool) -> Res<(
         return Err(format!("Environment {file} already exists"));
     }
     fs::create_dir_all(resolve(&root, ENV_DIR)?).map_err(err)?;
-    fs::write(path, to_json(&data)?).map_err(err)
+    watcher::write_file(&path, &to_json(&data)?).map_err(err)
 }
 
 #[tauri::command]

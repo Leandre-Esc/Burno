@@ -1,21 +1,25 @@
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
-import { collectionApi, envApi, type RawNode } from "./api";
+import { collectionApi, envApi, onCollectionChanged, type RawNode } from "./api";
 import {
+  authSecretsOf,
   clearLegacyRequests,
+  forgetRequestSecrets,
   loadActiveRequest,
   loadCollectionRoots,
   loadExpanded,
   loadLegacyRequests,
   loadTokens,
-  moveTokens,
   normalizeRequest,
   saveActiveRequest,
+  saveAuthSecrets,
   saveCollectionRoots,
   saveExpanded,
   saveSecrets,
   saveToken,
+  stripAuthSecrets,
   stripSecrets,
+  withAuthSecrets,
   withSecrets,
 } from "./storage";
 import { newRequest, withEmptyRow, type OAuth2Token, type RequestItem, type Variable } from "./types";
@@ -90,9 +94,17 @@ function uniqueName(siblings: TreeNode[], base: string, ext: string): string {
   }
 }
 
-/** What goes in the request file: no in-memory id, no OAuth token. */
+/** What goes in the request file: no in-memory id, no OAuth token, no credentials. */
 function toFile(req: RequestItem) {
-  return { ...req, id: undefined, auth: { ...req.auth, oauth2: { ...req.auth.oauth2, token: null } } };
+  const auth = stripAuthSecrets(req.auth);
+  return { ...req, id: undefined, auth: { ...auth, oauth2: { ...auth.oauth2, token: null } } };
+}
+
+/** A request read from disk whose file must be rewritten (no uid, copied uid or credentials in clear). */
+interface Migration {
+  req: RequestItem;
+  /** Token still saved under the path-based key used by older versions */
+  legacyTokenKey?: string;
 }
 
 function convert(
@@ -100,12 +112,26 @@ function convert(
   nodes: RawNode[],
   requests: Record<string, RequestItem>,
   tokens: Record<string, OAuth2Token>,
+  migrations: Migration[],
+  seenUids: Set<string>,
 ): TreeNode[] {
   return nodes.map((node): TreeNode => {
-    if (node.kind === "folder") return { ...node, children: convert(root, node.children, requests, tokens) };
+    if (node.kind === "folder") {
+      return { ...node, children: convert(root, node.children, requests, tokens, migrations, seenUids) };
+    }
     const id = nodeKey(root, node.path);
+    const data = node.data as { uid?: unknown };
     const req = normalizeRequest({ name: baseName(node.path).replace(/\.json$/, ""), ...(node.data as object), id });
-    req.auth.oauth2.token = tokens[id] ?? null;
+    const fileUid = typeof data.uid === "string" ? data.uid : "";
+    // A file copied by hand carries the uid of the original
+    const newUid = !fileUid || seenUids.has(fileUid);
+    req.uid = newUid ? crypto.randomUUID() : fileUid;
+    seenUids.add(req.uid);
+    const clearCredentials = Object.keys(authSecretsOf(req.auth)).length > 0;
+    req.auth = withAuthSecrets(req.auth, fileUid);
+    const legacyToken = !fileUid ? tokens[id] : undefined;
+    req.auth.oauth2.token = tokens[fileUid] ?? legacyToken ?? null;
+    if (newUid || clearCredentials) migrations.push({ req, legacyTokenKey: legacyToken ? id : undefined });
     requests[id] = req;
     return { kind: "request", path: node.path, id };
   });
@@ -120,8 +146,9 @@ async function migrateLegacyRequests(root: string) {
     used.add(sanitize(name).toLowerCase());
     const path = `${sanitize(name)}.json`;
     try {
+      if (!saveAuthSecrets(req.uid, req.auth)) continue; // keep it in localStorage rather than lose credentials
       await collectionApi.createRequest(root, path, toFile({ ...req, name }));
-      if (req.auth.oauth2.token) saveToken(nodeKey(root, path), req.auth.oauth2.token);
+      if (req.auth.oauth2.token) saveToken(req.uid, req.auth.oauth2.token);
     } catch {
       // file already exists: keep the one on disk
     }
@@ -155,24 +182,44 @@ export function useCollections() {
       fn(...args).catch(report);
     };
 
+  /** Rewrites files that still lack a uid or hold credentials, once those are safe on this machine. */
+  const migrate = async (migrations: Migration[]) => {
+    for (const { req, legacyTokenKey } of migrations) {
+      if (timers.current.has(req.id)) continue; // the pending write does it, from newer content
+      if (!saveAuthSecrets(req.uid, req.auth)) {
+        report(new Error(`Could not store the credentials of "${req.name}" on this machine: its file was left as is.`));
+        continue;
+      }
+      saveToken(req.uid, req.auth.oauth2.token);
+      await writeNow(req);
+      if (legacyTokenKey) saveToken(legacyTokenKey, null);
+    }
+  };
+
   /** Re-reads a collection from disk (disk is the source of truth). */
   const reload = async (root: string) => {
     const raw = await collectionApi.load(root);
     const fresh: Record<string, RequestItem> = {};
+    const migrations: Migration[] = [];
     const variables = withEmptyRow<Variable>(raw.variables);
     const collection = {
       root,
       name: raw.name,
       variables: withSecrets(varsOwner(root), variables),
-      children: convert(root, raw.children, fresh, loadTokens()),
+      children: convert(root, raw.children, fresh, loadTokens(), migrations, new Set()),
     };
     // Unsaved variable edits win over what is still on disk
     const pending = timers.current.has(varsOwner(root));
     setLoaded((l) => ({ ...l, [root]: pending && l[root] ? { ...collection, variables: l[root].variables } : collection }));
-    setRequests((rs) => ({
-      ...Object.fromEntries(Object.entries(rs).filter(([id]) => !id.startsWith(nodeKey(root, "")))),
-      ...fresh,
-    }));
+    setRequests((rs) => {
+      // Edits not written yet win over what is still on disk
+      for (const id of Object.keys(fresh)) if (timers.current.has(id) && rs[id]) fresh[id] = rs[id];
+      return {
+        ...Object.fromEntries(Object.entries(rs).filter(([id]) => !id.startsWith(nodeKey(root, "")))),
+        ...fresh,
+      };
+    });
+    await migrate(migrations);
   };
 
   const writeNow = (req: RequestItem) => {
@@ -198,13 +245,12 @@ export function useCollections() {
       return next;
     });
 
-  /** Keeps ids (active request, expanded folders, tokens) valid after a rename. */
+  /** Keeps ids (active request, expanded folders) valid after a rename. */
   const remap = (root: string, from: string, to: string) => {
     const fromKey = nodeKey(root, from);
     const toKey = nodeKey(root, to);
     const move = (id: string) =>
       id === fromKey || id.startsWith(`${fromKey}/`) ? toKey + id.slice(fromKey.length) : id;
-    moveTokens(move);
     setActiveId((id) => id && move(id));
     setExpanded((ex) => new Set([...ex].map(move)));
   };
@@ -230,17 +276,31 @@ export function useCollections() {
     })().catch(report);
   }, []);
 
+  // Follow what changes on disk: git pull, another editor, a synced folder…
+  useEffect(() => {
+    collectionApi.watch(roots).catch(report);
+  }, [roots]);
+  useEffect(() => {
+    const stop = onCollectionChanged((root) => {
+      reload(root).catch(report);
+    });
+    return () => stop();
+  }, []);
+
   const updateRequest = (req: RequestItem) => {
     setRequests((rs) => ({ ...rs, [req.id]: req }));
-    saveToken(req.id, req.auth.oauth2.token);
+    saveToken(req.uid, req.auth.oauth2.token);
+    if (!saveAuthSecrets(req.uid, req.auth)) report(new Error("Could not store the credentials on this machine."));
     clearTimeout(timers.current.get(req.id));
-    timers.current.set(
-      req.id,
-      window.setTimeout(() => {
-        timers.current.delete(req.id);
-        writeNow(req).catch(report);
-      }, SAVE_DELAY_MS),
-    );
+    const timer = window.setTimeout(() => {
+      // Stays pending until written, so a reload can't bring back older content meanwhile
+      writeNow(req)
+        .catch(report)
+        .finally(() => {
+          if (timers.current.get(req.id) === timer) timers.current.delete(req.id);
+        });
+    }, SAVE_DELAY_MS);
+    timers.current.set(req.id, timer);
   };
 
   const setVariables = (root: string, variables: Variable[]) => {
@@ -301,7 +361,9 @@ export function useCollections() {
       const dir = parentDir(path);
       const name = uniqueName(folderChildren(loaded[root].children, dir), `${source.name} copy`, ".json");
       const copyPath = joinPath(dir, `${sanitize(name)}.json`);
-      await collectionApi.createRequest(root, copyPath, toFile({ ...source, name }));
+      const uid = crypto.randomUUID();
+      saveAuthSecrets(uid, source.auth);
+      await collectionApi.createRequest(root, copyPath, toFile({ ...source, uid, name }));
       await reload(root);
       setActiveId(nodeKey(root, copyPath));
     }),
@@ -333,6 +395,9 @@ export function useCollections() {
       await flush();
       await collectionApi.deleteEntry(root, path);
       const key = nodeKey(root, path);
+      Object.values(latest.current)
+        .filter((r) => r.id === key || r.id.startsWith(`${key}/`))
+        .forEach((r) => forgetRequestSecrets(r.uid));
       setActiveId((id) => (id === key || id?.startsWith(`${key}/`) ? null : id));
       await reload(root);
     }),

@@ -205,10 +205,19 @@ export function VarInput({ value, onChange, placeholder, className = "", inputCl
 const mask = (value: string) => "•".repeat(Math.min(Math.max(value.length, 6), 16));
 
 function VarTooltip({ name, scope, x, y }: { name: string; scope: Scope; x: number; y: number }) {
+  return (
+    <div className="var-tooltip" style={{ left: Math.min(x, window.innerWidth - 340), top: y }}>
+      <VarInfo name={name} scope={scope} />
+    </div>
+  );
+}
+
+/** What a `{{variable}}` resolves to and where it comes from */
+export function VarInfo({ name, scope }: { name: string; scope: Scope }) {
   const v = scope[name];
   const dynamic = DYNAMIC[name];
   return (
-    <div className="var-tooltip" style={{ left: Math.min(x, window.innerWidth - 340), top: y }}>
+    <>
       <div className="var-tooltip-name">
         <code>{name}</code>
         <span className={`var-tag ${v ? v.source : dynamic ? "" : "missing"}`}>
@@ -228,6 +237,6 @@ function VarTooltip({ name, scope, x, y }: { name: string; scope: Scope; x: numb
       ) : (
         <div className="var-tooltip-note">Not defined in the request, the active environments or the collection.</div>
       )}
-    </div>
+    </>
   );
 }

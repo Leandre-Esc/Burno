@@ -49,7 +49,9 @@ export function RequestEditor({ request, vars, onChange }: Props) {
             onChange={(params) => set({ params, url: urlFromParams(request.url, params) })}
           />
         )}
-        {tab === "body" && <BodyEditor body={request.body} onChange={(body) => set({ body })} />}
+        {tab === "body" && (
+          <BodyEditor key={request.id} body={request.body} headers={request.headers} onChange={(body) => set({ body })} />
+        )}
         {tab === "headers" && <KeyValueEditor rows={request.headers} onChange={(headers) => set({ headers })} />}
         {tab === "auth" && (
           <AuthEditor auth={request.auth} vars={vars} settings={request.settings} onChange={(auth) => set({ auth })} />
